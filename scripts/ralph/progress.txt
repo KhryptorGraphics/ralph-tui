@@ -843,3 +843,27 @@ Started: Sun 11 Jan 10:55:32 GMT 2026
   - Separating data gathering from display logic enables both human and machine outputs
   - Exit codes should be semantic: 0=success, 1=in-progress, 2=error/no-session
 ---
+
+## 2026-01-11 - ralph-tui-45r.29
+- What was implemented:
+  - US-029: Log Output Mode with full acceptance criteria
+  - Added --no-tui flag as alias for --headless
+  - Created StructuredLogger class for CI/scripts output
+  - Log format: [timestamp] [level] [component] message
+  - Log levels: DEBUG, INFO, WARN, ERROR
+  - Log components: progress, agent, engine, tracker, session, system
+  - Progress updates: [INFO] [progress] Iteration X/Y: Working on task-id - task title
+  - Agent output streamed with [AGENT] prefix (info for stdout, warn for stderr)
+  - All same flags work as TUI mode
+  - Iteration output still saved to files via existing saveIterationLog()
+- Files changed:
+  - src/logs/structured-logger.ts (new) - Structured logger class and factory
+  - src/logs/index.ts (updated) - Export structured logger
+  - src/commands/run.tsx (updated) - Added --no-tui flag, rewrote runHeadless to use structured logger
+  - src/cli.tsx (updated) - Updated help text with --no-tui flag
+- **Learnings:**
+  - Structured logging separates concerns: formatting vs output stream vs level filtering
+  - The factory pattern (createStructuredLogger) provides sensible defaults while allowing customization
+  - Using stderr for WARN and ERROR levels follows Unix convention and allows piping stdout
+  - The engine already emits all necessary events (agent:output, iteration:*, etc.) - just needed to format them
+---
