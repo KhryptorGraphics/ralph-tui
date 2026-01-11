@@ -13,6 +13,7 @@ import {
   executeRunCommand,
   executeStatusCommand,
   executeResumeCommand,
+  executeConfigCommand,
 } from './commands/index.js';
 
 /**
@@ -29,6 +30,7 @@ Commands:
   run [options]       Start Ralph execution
   resume [options]    Resume an interrupted session
   status              Check session status
+  config show         Display merged configuration
   plugins agents      List available agent plugins
   plugins trackers    List available tracker plugins
   help, --help, -h    Show this help message
@@ -88,6 +90,12 @@ async function handleSubcommand(args: string[]): Promise<boolean> {
   // Status command
   if (command === 'status') {
     await executeStatusCommand(args.slice(1));
+    return true;
+  }
+
+  // Config command
+  if (command === 'config') {
+    await executeConfigCommand(args.slice(1));
     return true;
   }
 

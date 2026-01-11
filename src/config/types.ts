@@ -77,7 +77,22 @@ export interface StoredConfig {
   outputDir?: string;
 
   /** Error handling configuration */
-  errorHandling?: ErrorHandlingConfig;
+  errorHandling?: Partial<ErrorHandlingConfig>;
+
+  /** Shorthand: agent plugin name */
+  agent?: string;
+
+  /** Shorthand: tracker plugin name */
+  tracker?: string;
+
+  /** Shorthand: agent-specific options */
+  agentOptions?: Record<string, unknown>;
+
+  /** Shorthand: tracker-specific options */
+  trackerOptions?: Record<string, unknown>;
+
+  /** Whether to auto-commit after successful tasks */
+  autoCommit?: boolean;
 }
 
 /**

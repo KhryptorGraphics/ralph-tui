@@ -26,3 +26,9 @@ export {
   parseResumeArgs,
   printResumeHelp,
 } from './resume.jsx';
+
+export {
+  executeConfigCommand,
+  executeConfigShowCommand,
+  printConfigHelp,
+} from './config.js';

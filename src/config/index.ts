@@ -1,12 +1,13 @@
 /**
  * ABOUTME: Configuration loading and validation for Ralph TUI.
- * Handles merging stored config with CLI options and validating the result.
+ * Handles loading global and project configs, merging them, and validating the result.
+ * Supports: ~/.config/ralph-tui/config.yaml (global) and .ralph-tui.yaml (project).
  */
 
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { readFile, access, constants } from 'node:fs/promises';
-import { parse as parseYaml } from 'yaml';
+import { parse as parseYaml, stringify as stringifyYaml } from 'yaml';
 import type {
   StoredConfig,
   RalphConfig,
@@ -19,26 +20,222 @@ import type { AgentPluginConfig } from '../plugins/agents/types.js';
 import type { TrackerPluginConfig } from '../plugins/trackers/types.js';
 import { getAgentRegistry } from '../plugins/agents/registry.js';
 import { getTrackerRegistry } from '../plugins/trackers/registry.js';
+import {
+  validateStoredConfig,
+  formatConfigErrors,
+  type ConfigParseResult,
+} from './schema.js';
 
 /**
- * Default config file path
+ * Global config file path (~/.config/ralph-tui/config.yaml)
  */
-const CONFIG_PATH = join(homedir(), '.config', 'ralph-tui', 'config.yaml');
+const GLOBAL_CONFIG_PATH = join(homedir(), '.config', 'ralph-tui', 'config.yaml');
 
 /**
- * Load stored configuration from YAML file
+ * Project config file name (.ralph-tui.yaml in project root)
  */
-export async function loadStoredConfig(
-  configPath: string = CONFIG_PATH
-): Promise<StoredConfig> {
+const PROJECT_CONFIG_FILENAME = '.ralph-tui.yaml';
+
+/**
+ * Config source information for debugging
+ */
+export interface ConfigSource {
+  /** Path to the global config (if it exists) */
+  globalPath: string | null;
+  /** Path to the project config (if it exists) */
+  projectPath: string | null;
+  /** Whether global config was loaded */
+  globalLoaded: boolean;
+  /** Whether project config was loaded */
+  projectLoaded: boolean;
+}
+
+/**
+ * Result of loading a config file
+ */
+interface LoadConfigResult {
+  config: StoredConfig;
+  exists: boolean;
+  errors?: string;
+}
+
+/**
+ * Load and validate a single YAML config file.
+ * @param configPath Path to the config file
+ * @returns Parsed and validated config, or empty object if file doesn't exist
+ */
+async function loadConfigFile(configPath: string): Promise<LoadConfigResult> {
   try {
     await access(configPath, constants.R_OK);
     const content = await readFile(configPath, 'utf-8');
-    return parseYaml(content) as StoredConfig;
+    const parsed = parseYaml(content);
+
+    // Handle empty file
+    if (parsed === null || parsed === undefined) {
+      return { config: {}, exists: true };
+    }
+
+    // Validate with Zod
+    const result: ConfigParseResult = validateStoredConfig(parsed);
+    if (!result.success) {
+      const errorMsg = formatConfigErrors(result.errors ?? [], configPath);
+      return { config: {}, exists: true, errors: errorMsg };
+    }
+
+    return { config: result.data as StoredConfig, exists: true };
   } catch {
-    // Return empty config if file doesn't exist
-    return {};
+    // File doesn't exist or can't be read
+    return { config: {}, exists: false };
   }
+}
+
+/**
+ * Find the project config file by searching up from cwd.
+ * @param startDir Directory to start searching from
+ * @returns Path to project config if found, null otherwise
+ */
+async function findProjectConfigPath(startDir: string): Promise<string | null> {
+  let dir = startDir;
+  const root = dirname(dir);
+
+  while (dir !== root) {
+    const configPath = join(dir, PROJECT_CONFIG_FILENAME);
+    try {
+      await access(configPath, constants.R_OK);
+      return configPath;
+    } catch {
+      // Not found, go up one level
+      dir = dirname(dir);
+    }
+  }
+
+  // Check root as well
+  const rootConfig = join(root, PROJECT_CONFIG_FILENAME);
+  try {
+    await access(rootConfig, constants.R_OK);
+    return rootConfig;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Deep merge two config objects. Project config overrides global config.
+ * Arrays are replaced (not merged) to give project full control.
+ */
+function mergeConfigs(global: StoredConfig, project: StoredConfig): StoredConfig {
+  const merged: StoredConfig = { ...global };
+
+  // Override scalar values from project
+  if (project.defaultAgent !== undefined) merged.defaultAgent = project.defaultAgent;
+  if (project.defaultTracker !== undefined) merged.defaultTracker = project.defaultTracker;
+  if (project.maxIterations !== undefined) merged.maxIterations = project.maxIterations;
+  if (project.iterationDelay !== undefined) merged.iterationDelay = project.iterationDelay;
+  if (project.outputDir !== undefined) merged.outputDir = project.outputDir;
+  if (project.agent !== undefined) merged.agent = project.agent;
+  if (project.tracker !== undefined) merged.tracker = project.tracker;
+
+  // Replace arrays entirely if present in project config
+  if (project.agents !== undefined) merged.agents = project.agents;
+  if (project.trackers !== undefined) merged.trackers = project.trackers;
+
+  // Merge nested objects
+  if (project.agentOptions !== undefined) {
+    merged.agentOptions = { ...merged.agentOptions, ...project.agentOptions };
+  }
+  if (project.trackerOptions !== undefined) {
+    merged.trackerOptions = { ...merged.trackerOptions, ...project.trackerOptions };
+  }
+  if (project.errorHandling !== undefined) {
+    merged.errorHandling = { ...merged.errorHandling, ...project.errorHandling };
+  }
+
+  return merged;
+}
+
+/**
+ * Load stored configuration from global and project YAML files.
+ * Project config (.ralph-tui.yaml) overrides global config (~/.config/ralph-tui/config.yaml).
+ * @param cwd Working directory for finding project config
+ * @param globalConfigPath Override global config path (for testing)
+ * @returns Merged configuration
+ */
+export async function loadStoredConfig(
+  cwd: string = process.cwd(),
+  globalConfigPath: string = GLOBAL_CONFIG_PATH
+): Promise<StoredConfig> {
+  // Load global config
+  const globalResult = await loadConfigFile(globalConfigPath);
+  if (globalResult.errors) {
+    console.error(globalResult.errors);
+  }
+
+  // Find and load project config
+  const projectPath = await findProjectConfigPath(cwd);
+  let projectResult: LoadConfigResult = { config: {}, exists: false };
+  if (projectPath) {
+    projectResult = await loadConfigFile(projectPath);
+    if (projectResult.errors) {
+      console.error(projectResult.errors);
+    }
+  }
+
+  // Merge configs (project overrides global)
+  return mergeConfigs(globalResult.config, projectResult.config);
+}
+
+/**
+ * Load stored configuration with source information.
+ * Useful for debugging and the 'config show' command.
+ * @param cwd Working directory for finding project config
+ * @param globalConfigPath Override global config path (for testing)
+ * @returns Config and source information
+ */
+export async function loadStoredConfigWithSource(
+  cwd: string = process.cwd(),
+  globalConfigPath: string = GLOBAL_CONFIG_PATH
+): Promise<{ config: StoredConfig; source: ConfigSource }> {
+  // Load global config
+  const globalResult = await loadConfigFile(globalConfigPath);
+  if (globalResult.errors) {
+    console.error(globalResult.errors);
+  }
+
+  // Find and load project config
+  const projectPath = await findProjectConfigPath(cwd);
+  let projectResult: LoadConfigResult = { config: {}, exists: false };
+  if (projectPath) {
+    projectResult = await loadConfigFile(projectPath);
+    if (projectResult.errors) {
+      console.error(projectResult.errors);
+    }
+  }
+
+  // Build source info
+  const source: ConfigSource = {
+    globalPath: globalResult.exists ? globalConfigPath : null,
+    projectPath: projectResult.exists && projectPath ? projectPath : null,
+    globalLoaded: globalResult.exists,
+    projectLoaded: projectResult.exists,
+  };
+
+  // Merge configs (project overrides global)
+  return {
+    config: mergeConfigs(globalResult.config, projectResult.config),
+    source,
+  };
+}
+
+/**
+ * Serialize configuration to YAML string.
+ * @param config Configuration to serialize
+ * @returns YAML string
+ */
+export function serializeConfig(config: StoredConfig): string {
+  return stringifyYaml(config, {
+    indent: 2,
+    lineWidth: 100,
+  });
 }
 
 /**
@@ -152,12 +349,14 @@ function getDefaultTrackerConfig(
 }
 
 /**
- * Build runtime configuration by merging stored config with CLI options
+ * Build runtime configuration by merging stored config with CLI options.
+ * Loads both global (~/.config/ralph-tui/config.yaml) and project (.ralph-tui.yaml) configs.
  */
 export async function buildConfig(
   options: RuntimeOptions = {}
 ): Promise<RalphConfig | null> {
-  const storedConfig = await loadStoredConfig();
+  const cwd = options.cwd ?? process.cwd();
+  const storedConfig = await loadStoredConfig(cwd);
 
   // Get agent config
   const agentConfig = getDefaultAgentConfig(storedConfig, options);
@@ -275,3 +474,24 @@ export async function validateConfig(
 // Re-export types
 export type { StoredConfig, RalphConfig, RuntimeOptions, ConfigValidationResult };
 export { DEFAULT_CONFIG };
+
+// Export schema utilities
+export {
+  validateStoredConfig,
+  formatConfigErrors,
+  StoredConfigSchema,
+  AgentPluginConfigSchema,
+  TrackerPluginConfigSchema,
+  ErrorHandlingConfigSchema,
+} from './schema.js';
+export type {
+  ConfigParseResult,
+  ConfigValidationError,
+  StoredConfigValidated,
+} from './schema.js';
+
+// Constants for external use
+export const CONFIG_PATHS = {
+  global: GLOBAL_CONFIG_PATH,
+  projectFilename: PROJECT_CONFIG_FILENAME,
+} as const;
