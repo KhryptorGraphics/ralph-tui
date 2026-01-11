@@ -59,7 +59,7 @@ export const colors = {
 /**
  * Status indicator symbols
  * Task status: ✓ (done), ▶ (active/actionable), ○ (pending), ⊘ (blocked), ✓ (closed - greyed)
- * Ralph status: ▶ (running), ◎ (pausing), ⏸ (paused), ■ (stopped), ✓ (complete), ○ (idle)
+ * Ralph status: ▶ (running), ◎ (pausing), ⏸ (paused), ■ (stopped), ✓ (complete), ○ (idle/ready)
  */
 export const statusIndicators = {
   done: '✓',
@@ -74,6 +74,7 @@ export const statusIndicators = {
   stopped: '■',
   complete: '✓',
   idle: '○',
+  ready: '◉', // Ready to start - waiting for user action
 } as const;
 
 /**
@@ -81,6 +82,7 @@ export const statusIndicators = {
  */
 export const keyboardShortcuts = [
   { key: 'q', description: 'Quit' },
+  { key: 'Enter', description: 'Start' },
   { key: 'p', description: 'Pause/Resume' },
   { key: 'd', description: 'Dashboard' },
   { key: 'h', description: 'Hide/Show Closed' },
@@ -95,6 +97,7 @@ export const fullKeyboardShortcuts = [
   { key: '?', description: 'Show/hide this help', category: 'General' },
   { key: 'q', description: 'Quit Ralph', category: 'General' },
   { key: 'Esc', description: 'Go back / Cancel', category: 'General' },
+  { key: 'Enter/s', description: 'Start execution (when ready)', category: 'Execution' },
   { key: 'p', description: 'Pause / Resume execution', category: 'Execution' },
   { key: 'd', description: 'Toggle progress dashboard', category: 'Views' },
   { key: 'h', description: 'Toggle show/hide closed tasks', category: 'Views' },
@@ -133,6 +136,7 @@ export const layout = {
 
 /**
  * Ralph status types
+ * - 'ready': Waiting for user to start execution (interactive mode)
  * - 'running': Actively executing iterations
  * - 'pausing': Pause requested, waiting for current iteration to complete
  * - 'paused': Paused, waiting to resume
@@ -141,7 +145,7 @@ export const layout = {
  * - 'idle': Stopped, no more tasks available
  * - 'error': Stopped due to error
  */
-export type RalphStatus = 'running' | 'pausing' | 'paused' | 'stopped' | 'complete' | 'idle' | 'error';
+export type RalphStatus = 'ready' | 'running' | 'pausing' | 'paused' | 'stopped' | 'complete' | 'idle' | 'error';
 
 /**
  * Task status types matching the acceptance criteria

@@ -38,6 +38,8 @@ export interface ProgressDashboardProps {
  */
 function getStatusDisplay(status: RalphStatus): { label: string; color: string; indicator: string } {
   switch (status) {
+    case 'ready':
+      return { label: 'Ready - Press Enter or s to start', color: colors.status.info, indicator: statusIndicators.ready };
     case 'running':
       return { label: 'Running', color: colors.status.success, indicator: statusIndicators.running };
     case 'pausing':

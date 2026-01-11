@@ -327,6 +327,10 @@ interface RunAppWrapperProps {
   interruptHandler: InterruptHandler;
   onQuit: () => Promise<void>;
   onInterruptConfirmed: () => Promise<void>;
+  /** Initial tasks to display before engine starts */
+  initialTasks?: TrackerTask[];
+  /** Callback when user wants to start the engine (Enter/s in ready state) */
+  onStart?: () => Promise<void>;
 }
 
 /**
@@ -338,6 +342,8 @@ function RunAppWrapper({
   interruptHandler,
   onQuit,
   onInterruptConfirmed,
+  initialTasks,
+  onStart,
 }: RunAppWrapperProps) {
   const [showInterruptDialog, setShowInterruptDialog] = useState(false);
 
@@ -366,6 +372,8 @@ function RunAppWrapper({
         setShowInterruptDialog(false);
         interruptHandler.reset();
       }}
+      initialTasks={initialTasks}
+      onStart={onStart}
     />
   );
 }
@@ -373,20 +381,26 @@ function RunAppWrapper({
 /**
  * Run the execution engine with TUI
  *
- * IMPORTANT: The TUI stays open until the user explicitly quits (q key or Ctrl+C).
+ * IMPORTANT: The TUI now launches in a "ready" state by default (interactive mode).
+ * The engine does NOT auto-start. Users must press Enter or 's' to start execution.
+ * This allows users to review available tasks before committing to a run.
+ *
+ * The TUI stays open until the user explicitly quits (q key or Ctrl+C).
  * The engine may stop for various reasons (all tasks done, max iterations, no tasks, error)
  * but the TUI remains visible so the user can review results before exiting.
  */
 async function runWithTui(
   engine: ExecutionEngine,
   persistedState: PersistedSessionState,
-  _config: RalphConfig
+  _config: RalphConfig,
+  initialTasks: TrackerTask[]
 ): Promise<PersistedSessionState> {
   let currentState = persistedState;
   let showDialogCallback: (() => void) | null = null;
   let hideDialogCallback: (() => void) | null = null;
   let cancelledCallback: (() => void) | null = null;
   let resolveQuitPromise: (() => void) | null = null;
+  let engineStarted = false;
 
   const renderer = await createCliRenderer({
     exitOnCtrlC: false, // We handle this ourselves
@@ -458,13 +472,25 @@ async function runWithTui(
   // Handle SIGTERM separately (always graceful)
   process.on('SIGTERM', gracefulShutdown);
 
+  // onStart callback - called when user presses Enter or 's' to start execution
+  const handleStart = async (): Promise<void> => {
+    if (engineStarted) return; // Prevent double-start
+    engineStarted = true;
+    // Start the engine (this runs the loop in the background)
+    // The TUI will show running status via engine events
+    await engine.start();
+  };
+
   // Render the TUI with wrapper that manages dialog state
+  // Pass initialTasks for display in "ready" state and onStart callback
   root.render(
     <RunAppWrapper
       engine={engine}
       interruptHandler={interruptHandler}
       onQuit={gracefulShutdown}
       onInterruptConfirmed={gracefulShutdown}
+      initialTasks={initialTasks}
+      onStart={handleStart}
     />
   );
 
@@ -487,18 +513,17 @@ async function runWithTui(
     }
   }, 10);
 
-  // Start the engine (this will run the loop until it stops)
-  await engine.start();
+  // NOTE: We do NOT auto-start the engine here anymore.
+  // The engine starts when user presses Enter or 's' (via handleStart callback).
+  // This allows users to review tasks before starting.
 
-  // Engine has stopped (max iterations, all complete, no tasks, or error)
-  // But we keep the TUI open so the user can review results
   // Wait for user to explicitly quit (q key or Ctrl+C)
-  clearInterval(checkCallbacks);
-
-  // Create a promise that resolves when user quits
+  // This promise resolves when gracefulShutdown is called
   await new Promise<void>((resolve) => {
     resolveQuitPromise = resolve;
   });
+
+  clearInterval(checkCallbacks);
 
   return currentState;
 }
@@ -894,8 +919,10 @@ export async function executeRunCommand(args: string[]): Promise<void> {
   // Run with TUI or headless
   try {
     if (config.showTui) {
-      persistedState = await runWithTui(engine, persistedState, config);
+      // Pass tasks for initial TUI display in "ready" state
+      persistedState = await runWithTui(engine, persistedState, config, tasks);
     } else {
+      // Headless mode still auto-starts (for CI/automation)
       persistedState = await runHeadless(engine, persistedState, config);
     }
   } catch (error) {

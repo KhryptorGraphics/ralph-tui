@@ -12,6 +12,8 @@ import type { HeaderProps } from '../types.js';
  */
 function getStatusDisplay(status: RalphStatus): { indicator: string; color: string; label: string } {
   switch (status) {
+    case 'ready':
+      return { indicator: statusIndicators.ready, color: colors.status.info, label: 'Ready' };
     case 'running':
       return { indicator: statusIndicators.running, color: colors.status.success, label: 'Running' };
     case 'pausing':

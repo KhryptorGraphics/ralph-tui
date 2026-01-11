@@ -50,6 +50,10 @@ export interface RunAppProps {
   onInterruptConfirm?: () => void;
   /** Callback when user cancels interrupt */
   onInterruptCancel?: () => void;
+  /** Initial tasks to display before engine starts */
+  initialTasks?: TrackerTask[];
+  /** Callback when user wants to start the engine (Enter/s in ready state) */
+  onStart?: () => Promise<void>;
 }
 
 /**
@@ -174,11 +178,20 @@ export function RunApp({
   showInterruptDialog = false,
   onInterruptConfirm,
   onInterruptCancel,
+  initialTasks,
+  onStart,
 }: RunAppProps): ReactNode {
   const { width, height } = useTerminalDimensions();
-  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [tasks, setTasks] = useState<TaskItem[]>(() => {
+    // Initialize with initial tasks if provided (for ready state)
+    if (initialTasks && initialTasks.length > 0) {
+      return convertTasksWithDependencyStatus(initialTasks);
+    }
+    return [];
+  });
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [status, setStatus] = useState<RalphStatus>('running');
+  // Start in 'ready' state if we have onStart callback (waiting for user to start)
+  const [status, setStatus] = useState<RalphStatus>(onStart ? 'ready' : 'running');
   const [currentIteration, setCurrentIteration] = useState(0);
   const [currentOutput, setCurrentOutput] = useState('');
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -491,8 +504,23 @@ export function RunApp({
           setShowHelp(true);
           break;
 
+        case 's':
+          // Start execution when in ready state
+          if (status === 'ready' && onStart) {
+            setStatus('running');
+            onStart();
+          }
+          break;
+
         case 'return':
         case 'enter':
+          // When in ready state, Enter starts the execution
+          if (status === 'ready' && onStart) {
+            setStatus('running');
+            onStart();
+            break;
+          }
+
           if (viewMode === 'tasks') {
             // Drill into selected task details (use displayedTasks for filtered list)
             if (displayedTasks[selectedIndex]) {
@@ -512,7 +540,7 @@ export function RunApp({
           break;
       }
     },
-    [displayedTasks, selectedIndex, status, engine, onQuit, onTaskDrillDown, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp]
+    [displayedTasks, selectedIndex, status, engine, onQuit, onTaskDrillDown, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, onStart]
   );
 
   useKeyboard(handleKeyboard);
