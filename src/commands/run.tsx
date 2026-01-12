@@ -30,6 +30,7 @@ import {
   removeActiveTask,
   clearActiveTasks,
   getActiveTasks,
+  setSubagentPanelVisible,
   acquireLockWithPrompt,
   releaseLockNew,
   registerLockCleanupHandlers,
@@ -515,6 +516,10 @@ interface RunAppWrapperProps {
   trackerType?: string;
   /** Current epic ID for highlighting */
   currentEpicId?: string;
+  /** Initial subagent panel visibility (from persisted session) */
+  initialSubagentPanelVisible?: boolean;
+  /** Callback to update persisted session state */
+  onUpdatePersistedState?: (updater: (state: PersistedSessionState) => PersistedSessionState) => void;
 }
 
 /**
@@ -532,6 +537,8 @@ function RunAppWrapper({
   cwd = process.cwd(),
   trackerType,
   currentEpicId: initialEpicId,
+  initialSubagentPanelVisible = false,
+  onUpdatePersistedState,
 }: RunAppWrapperProps) {
   const [showInterruptDialog, setShowInterruptDialog] = useState(false);
   const [storedConfig, setStoredConfig] = useState<StoredConfig | undefined>(initialStoredConfig);
@@ -611,6 +618,13 @@ function RunAppWrapper({
     return false;
   };
 
+  // Handle subagent panel visibility change - persists to session state
+  const handleSubagentPanelVisibilityChange = (visible: boolean): void => {
+    if (onUpdatePersistedState) {
+      onUpdatePersistedState((state) => setSubagentPanelVisible(state, visible));
+    }
+  };
+
   // These callbacks are passed to the interrupt handler
   const handleShowDialog = () => setShowInterruptDialog(true);
   const handleHideDialog = () => setShowInterruptDialog(false);
@@ -648,6 +662,8 @@ function RunAppWrapper({
       onFilePathSwitch={handleFilePathSwitch}
       trackerType={trackerType}
       currentEpicId={currentEpicId}
+      initialSubagentPanelVisible={initialSubagentPanelVisible}
+      onSubagentPanelVisibilityChange={handleSubagentPanelVisibilityChange}
     />
   );
 }
@@ -783,6 +799,17 @@ async function runWithTui(
     await engine.start();
   };
 
+  // Handler to update persisted state and save it
+  // Used by subagent panel visibility toggle to persist state changes
+  const handleUpdatePersistedState = (
+    updater: (state: PersistedSessionState) => PersistedSessionState
+  ): void => {
+    currentState = updater(currentState);
+    savePersistedSession(currentState).catch(() => {
+      // Log but don't fail on save errors
+    });
+  };
+
   // Render the TUI with wrapper that manages dialog state
   // Pass initialTasks for display in "ready" state and onStart callback
   root.render(
@@ -797,6 +824,8 @@ async function runWithTui(
       cwd={config.cwd}
       trackerType={config.tracker.plugin}
       currentEpicId={config.epicId}
+      initialSubagentPanelVisible={persistedState.subagentPanelVisible ?? false}
+      onUpdatePersistedState={handleUpdatePersistedState}
     />
   );
 

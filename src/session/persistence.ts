@@ -110,6 +110,12 @@ export interface PersistedSessionState {
    * On startup, detect stale in_progress tasks from crashed sessions.
    */
   activeTaskIds: string[];
+
+  /**
+   * Whether the subagent tree panel is visible.
+   * Persisted to remember user preference across pauses/resumes.
+   */
+  subagentPanelVisible?: boolean;
 }
 
 /**
@@ -271,6 +277,7 @@ export function createPersistedSession(options: {
     skippedTaskIds: [],
     cwd: options.cwd,
     activeTaskIds: [],
+    subagentPanelVisible: false,
   };
 }
 
@@ -446,6 +453,19 @@ export function clearActiveTasks(
  */
 export function getActiveTasks(state: PersistedSessionState): string[] {
   return state.activeTaskIds ?? [];
+}
+
+/**
+ * Update subagent panel visibility in session state.
+ */
+export function setSubagentPanelVisible(
+  state: PersistedSessionState,
+  visible: boolean
+): PersistedSessionState {
+  return {
+    ...state,
+    subagentPanelVisible: visible,
+  };
 }
 
 /**

@@ -364,6 +364,7 @@ export {
   removeActiveTask,
   clearActiveTasks,
   getActiveTasks,
+  setSubagentPanelVisible,
   isSessionResumable,
   getSessionSummary,
 } from './persistence.js';

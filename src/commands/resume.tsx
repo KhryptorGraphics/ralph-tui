@@ -15,6 +15,7 @@ import {
   deletePersistedSession,
   pauseSession,
   updateSessionAfterIteration,
+  setSubagentPanelVisible,
   acquireLock,
   releaseLock,
   checkSession,
@@ -136,6 +137,14 @@ async function runWithTui(
   process.on('SIGINT', handleSignal);
   process.on('SIGTERM', handleSignal);
 
+  // Handler to update persisted state and save it
+  const handleSubagentPanelVisibilityChange = (visible: boolean): void => {
+    currentState = setSubagentPanelVisible(currentState, visible);
+    savePersistedSession(currentState).catch(() => {
+      // Log but don't fail on save errors
+    });
+  };
+
   root.render(
     <RunApp
       engine={engine}
@@ -148,6 +157,8 @@ async function runWithTui(
         process.exit(0);
       }}
       trackerType={trackerType}
+      initialSubagentPanelVisible={initialState.subagentPanelVisible ?? false}
+      onSubagentPanelVisibilityChange={handleSubagentPanelVisibilityChange}
     />
   );
 

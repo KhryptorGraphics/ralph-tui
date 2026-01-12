@@ -91,6 +91,7 @@ export const keyboardShortcuts = [
   { key: ',', description: 'Settings' },
   { key: 'd', description: 'Dashboard' },
   { key: 't', description: 'Trace' },
+  { key: 'T', description: 'Subagents' },
   { key: '↑↓', description: 'Navigate' },
   { key: '?', description: 'Help' },
 ] as const;
@@ -112,6 +113,7 @@ export const fullKeyboardShortcuts = [
   { key: 'v', description: 'Toggle iterations / tasks view', category: 'Views' },
   { key: 'o', description: 'Toggle details / output view', category: 'Views' },
   { key: 't', description: 'Cycle subagent detail level', category: 'Views' },
+  { key: 'T', description: 'Toggle subagent tree panel', category: 'Views' },
   { key: '↑ / k', description: 'Move selection up', category: 'Navigation' },
   { key: '↓ / j', description: 'Move selection down', category: 'Navigation' },
   { key: 'Enter', description: 'View selected item details', category: 'Navigation' },

@@ -23,6 +23,7 @@ import { HelpOverlay } from './HelpOverlay.js';
 import { SettingsView } from './SettingsView.js';
 import { EpicLoaderOverlay } from './EpicLoaderOverlay.js';
 import type { EpicLoaderMode } from './EpicLoaderOverlay.js';
+import { SubagentTreePanel } from './SubagentTreePanel.js';
 import type { ExecutionEngine, EngineEvent, IterationResult } from '../../engine/index.js';
 import type { TrackerTask } from '../../plugins/trackers/types.js';
 import type { StoredConfig, SubagentDetailLevel } from '../../config/types.js';
@@ -82,6 +83,10 @@ export interface RunAppProps {
   trackerType?: string;
   /** Current epic ID for highlighting in the loader */
   currentEpicId?: string;
+  /** Initial subagent panel visibility state (from persisted session) */
+  initialSubagentPanelVisible?: boolean;
+  /** Callback when subagent panel visibility changes (to persist state) */
+  onSubagentPanelVisibilityChange?: (visible: boolean) => void;
 }
 
 /**
@@ -218,6 +223,8 @@ export function RunApp({
   onFilePathSwitch,
   trackerType,
   currentEpicId,
+  initialSubagentPanelVisible = false,
+  onSubagentPanelVisibilityChange,
 }: RunAppProps): ReactNode {
   const { width, height } = useTerminalDimensions();
   const [tasks, setTasks] = useState<TaskItem[]>(() => {
@@ -295,6 +302,9 @@ export function RunApp({
     SubagentTraceStats | undefined
   >(undefined);
   const [iterationDetailSubagentLoading, setIterationDetailSubagentLoading] = useState(false);
+  // Subagent tree panel visibility state (toggled with 'T' key)
+  // Tracks subagents even when panel is hidden (subagentTree state continues updating)
+  const [subagentPanelVisible, setSubagentPanelVisible] = useState(initialSubagentPanelVisible);
 
   // Filter and sort tasks for display
   // Sort order: active → actionable → blocked → done → closed
@@ -708,6 +718,17 @@ export function RunApp({
           });
           break;
 
+        case 'T':
+          // Toggle subagent tree panel visibility (Shift+T)
+          // The panel shows on the right side; subagent tracking continues even when hidden
+          setSubagentPanelVisible((prev) => {
+            const newVisible = !prev;
+            // Persist the change to session state
+            onSubagentPanelVisibilityChange?.(newVisible);
+            return newVisible;
+          });
+          break;
+
         case 'return':
         case 'enter':
           // Enter drills into details (does NOT start execution - use 's' for that)
@@ -730,7 +751,7 @@ export function RunApp({
           break;
       }
     },
-    [displayedTasks, selectedIndex, status, engine, onQuit, onTaskDrillDown, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, showSettings, showEpicLoader, onStart, storedConfig, onSaveSettings, onLoadEpics, subagentDetailLevel]
+    [displayedTasks, selectedIndex, status, engine, onQuit, onTaskDrillDown, viewMode, iterations, iterationSelectedIndex, iterationHistoryLength, onIterationDrillDown, showInterruptDialog, onInterruptConfirm, onInterruptCancel, showHelp, showSettings, showEpicLoader, onStart, storedConfig, onSaveSettings, onLoadEpics, subagentDetailLevel, onSubagentPanelVisibilityChange]
   );
 
   useKeyboard(handleKeyboard);
@@ -1001,6 +1022,14 @@ export function RunApp({
               focusedSubagentId={focusedSubagentId}
               onSubagentToggle={handleSubagentToggle}
             />
+            {/* Subagent Tree Panel - shown on right side when toggled with 'T' key */}
+            {subagentPanelVisible && (
+              <SubagentTreePanel
+                tree={subagentTree}
+                activeSubagentId={focusedSubagentId}
+                width={45}
+              />
+            )}
           </>
         ) : (
           <>
@@ -1024,6 +1053,14 @@ export function RunApp({
               focusedSubagentId={focusedSubagentId}
               onSubagentToggle={handleSubagentToggle}
             />
+            {/* Subagent Tree Panel - shown on right side when toggled with 'T' key */}
+            {subagentPanelVisible && (
+              <SubagentTreePanel
+                tree={subagentTree}
+                activeSubagentId={focusedSubagentId}
+                width={45}
+              />
+            )}
           </>
         )}
       </box>
