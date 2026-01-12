@@ -235,7 +235,8 @@ export function RunApp({
   const [epicName] = useState('Ralph');
   // Derive agent/tracker names from config - these are displayed in the header
   const agentName = storedConfig?.defaultAgent || storedConfig?.agent || 'claude';
-  const trackerName = storedConfig?.defaultTracker || storedConfig?.tracker || trackerType || 'beads';
+  // Use trackerType (from resolved config.tracker.plugin) as priority since it's the actual plugin in use
+  const trackerName = trackerType || storedConfig?.defaultTracker || storedConfig?.tracker || 'beads';
   // Dashboard visibility state (off by default for compact header design)
   const [showDashboard, setShowDashboard] = useState(false);
   // Completed iterations count for ETA calculation

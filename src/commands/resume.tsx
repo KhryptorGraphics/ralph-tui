@@ -86,7 +86,8 @@ async function initializePlugins(): Promise<void> {
 async function runWithTui(
   engine: ExecutionEngine,
   cwd: string,
-  initialState: PersistedSessionState
+  initialState: PersistedSessionState,
+  trackerType?: string
 ): Promise<PersistedSessionState> {
   let currentState = initialState;
 
@@ -146,6 +147,7 @@ async function runWithTui(
         await cleanup();
         process.exit(0);
       }}
+      trackerType={trackerType}
     />
   );
 
@@ -368,7 +370,7 @@ export async function executeResumeCommand(args: string[]): Promise<void> {
   let finalState: PersistedSessionState;
   try {
     if (!headless && config.showTui) {
-      finalState = await runWithTui(engine, cwd, resumedState);
+      finalState = await runWithTui(engine, cwd, resumedState, config.tracker.plugin);
     } else {
       finalState = await runHeadless(engine, cwd, resumedState);
     }
