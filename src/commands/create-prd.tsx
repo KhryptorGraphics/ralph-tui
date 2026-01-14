@@ -6,7 +6,7 @@
 
 import { createCliRenderer } from '@opentui/core';
 import { createRoot } from '@opentui/react';
-import { access, stat } from 'node:fs/promises';
+import { access, readFile, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { PrdChatApp } from '../tui/components/PrdChatApp.js';
@@ -39,7 +39,11 @@ export interface CreatePrdArgs {
   /** Timeout for agent calls in milliseconds */
   timeout?: number;
 
+  /** PRD skill folder inside skills_dir */
   prdSkill?: string;
+
+  /** Resolved PRD skill prompt source */
+  prdSkillSource?: string;
 }
 
 /**
