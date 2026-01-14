@@ -100,7 +100,10 @@ While Ralph is running, use these keyboard shortcuts:
 
 | Key | Action |
 |-----|--------|
+| `s` | Start execution |
 | `p` | Pause/Resume execution |
+| `+` / `=` | Add 10 iterations (extends max iterations) |
+| `-` / `_` | Remove 10 iterations (minimum of current iteration or 1) |
 | `d` | Toggle progress dashboard |
 | `i` | Toggle iteration history |
 | `q` | Quit |
@@ -112,7 +115,7 @@ The terminal interface shows:
 
 - **Left Panel**: Task list with status indicators (✓ complete, → in progress, ○ pending)
 - **Right Panel**: Live agent output (stdout/stderr)
-- **Header**: Current iteration and active task
+- **Header**: Current iteration count (e.g., `[3/10]`) and active task
 - **Footer**: Available keyboard shortcuts
 
 ## Next Steps
