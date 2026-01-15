@@ -4,11 +4,14 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "prebuild": "bun run scripts/generate-search-index.ts",
+    "predev": "bun run scripts/generate-search-index.ts",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "bun run scripts/generate-search-index.ts && tsc --noEmit",
+    "generate-search": "bun run scripts/generate-search-index.ts"
   },
   "dependencies": {
     "@mdx-js/loader": "^3.1.0",

@@ -35,7 +35,23 @@ jobs:
       - name: Build
         run: bun run build
 
+  # Determine which paths changed
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      website: ${{ steps.filter.outputs.website }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            website:
+              - 'website/**'
+
   website:
+    needs: changes
+    if: ${{ needs.changes.outputs.website == 'true' }}
     runs-on: ubuntu-latest
 
     steps:

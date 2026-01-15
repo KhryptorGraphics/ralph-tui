@@ -29,6 +29,7 @@ out/
 website/.next/
 website/out/
 website/node_modules/
+website/lib/search-index.json
 
 # IDE
 .idea/
