@@ -167,7 +167,168 @@ docs: update README with configuration examples
 
 ## Testing
 
-Currently, Ralph TUI relies on manual testing:
+Ralph TUI uses [Bun's built-in test runner](https://bun.sh/docs/cli/test) for unit and integration tests.
+
+### Running Tests
+
+```bash
+# Run all tests
+bun test
+
+# Run tests in watch mode (re-runs on file changes)
+bun test --watch
+
+# Run tests with coverage report
+bun test --coverage
+
+# Run specific test file
+bun test tests/plugins/claude-agent.test.ts
+
+# Run tests matching a pattern
+bun test --grep "ExecutionEngine"
+```
+
+### Test File Naming Conventions
+
+- Test files are placed in the `tests/` directory
+- Test files must end with `.test.ts`
+- Mirror the `src/` structure: `src/plugins/agents/` → `tests/plugins/`
+- Name test files after the module they test: `claude.ts` → `claude-agent.test.ts`
+
+### Test Directory Structure
+
+```
+tests/
+├── commands/           # CLI command tests
+├── engine/             # Execution engine tests
+├── factories/          # Reusable test data factories
+│   ├── agent-config.ts
+│   ├── prd-data.ts
+│   ├── session-state.ts
+│   ├── tracker-config.ts
+│   └── tracker-task.ts
+├── fixtures/           # Static test data (JSON, configs)
+├── mocks/              # Mock implementations
+│   ├── agent-responses.ts
+│   ├── child-process.ts
+│   └── file-system.ts
+├── plugins/            # Plugin tests (agents, trackers)
+├── tui/                # TUI component tests
+├── utils/              # Utility function tests
+└── index.ts            # Test utilities exports
+```
+
+### Writing New Tests
+
+Every test file must start with an ABOUTME comment:
+
+```typescript
+/**
+ * ABOUTME: Tests for the ExecutionEngine.
+ * Tests state machine transitions, iteration logic, and error handling.
+ */
+
+import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
+```
+
+#### Basic Test Structure
+
+```typescript
+describe('ModuleName', () => {
+  let instance: MyClass;
+
+  beforeEach(() => {
+    instance = new MyClass();
+  });
+
+  afterEach(async () => {
+    await instance.dispose();
+  });
+
+  describe('methodName', () => {
+    test('should do expected behavior', () => {
+      const result = instance.methodName();
+      expect(result).toBe(expectedValue);
+    });
+
+    test('should handle edge case', () => {
+      expect(() => instance.methodName(null)).toThrow();
+    });
+  });
+});
+```
+
+### Using Factories
+
+Factories provide consistent test data with sensible defaults. Import from `tests/factories/`:
+
+```typescript
+import { createTrackerTask, createTrackerTasks } from '../factories/tracker-task.js';
+import { createSessionState } from '../factories/session-state.js';
+
+test('should process task', () => {
+  // Create with defaults
+  const task = createTrackerTask();
+
+  // Create with overrides
+  const customTask = createTrackerTask({
+    id: 'custom-id',
+    status: 'in_progress',
+    priority: 1,
+  });
+
+  // Create multiple tasks
+  const tasks = createTrackerTasks(5, { status: 'open' });
+});
+```
+
+### Using Mocks
+
+Mocks simulate external dependencies. Import from `tests/mocks/`:
+
+```typescript
+import { createMockAgentPlugin, createSuccessfulExecution } from '../mocks/agent-responses.js';
+import { createMockChildProcess } from '../mocks/child-process.js';
+import { createMockFileSystem } from '../mocks/file-system.js';
+
+test('should execute agent', async () => {
+  const mockAgent = createMockAgentPlugin();
+  const mockExecution = createSuccessfulExecution('Task completed');
+  
+  // Use bun:test mock for module mocking
+  mock.module('../../src/plugins/agents/registry.js', () => ({
+    getAgentRegistry: () => ({
+      getInstance: () => Promise.resolve(mockAgent),
+    }),
+  }));
+});
+```
+
+#### Spying on Methods
+
+```typescript
+import { spyOn } from 'bun:test';
+
+test('should call dependency', () => {
+  const spy = spyOn(dependency, 'method');
+  
+  instance.doSomething();
+  
+  expect(spy).toHaveBeenCalledTimes(1);
+  expect(spy).toHaveBeenCalledWith('expected-arg');
+});
+```
+
+### Coverage Requirements
+
+- Aim for **80%+ line coverage** on new code
+- Critical paths (engine, plugins) should have higher coverage
+- Run `bun test --coverage` to check coverage locally
+- Coverage reports are generated in CI and uploaded to Codecov
+
+### Manual Testing
+
+For integration testing with actual AI agents:
 
 ```bash
 # Test the TUI
@@ -179,7 +340,7 @@ bun run ./src/cli.tsx plugins agents
 bun run ./src/cli.tsx config show
 ```
 
-When testing changes:
+When testing changes manually:
 - Test with different trackers (beads, json)
 - Test with different agents (claude, opencode)
 - Test TUI keyboard navigation
