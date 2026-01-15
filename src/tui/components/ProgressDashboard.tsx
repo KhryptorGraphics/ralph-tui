@@ -93,7 +93,7 @@ export function ProgressDashboard({
   const modelDisplay = currentModel
     ? (() => {
         const [provider, model] = currentModel.includes('/') ? currentModel.split('/') : ['', currentModel];
-        return { provider, model, full: currentModel };
+        return { provider, model, full: currentModel, display: provider ? `${provider}/${model}` : model };
       })()
     : null;
 
@@ -127,7 +127,7 @@ export function ProgressDashboard({
           {modelDisplay && (
             <>
               <text fg={colors.fg.muted}> | </text>
-              <text fg={colors.accent.primary}>{modelDisplay.provider}/{modelDisplay.model}</text>
+              <text fg={colors.accent.primary}>{modelDisplay.display}</text>
             </>
           )}
           <text fg={colors.fg.muted}> | </text>

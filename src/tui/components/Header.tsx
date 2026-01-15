@@ -161,7 +161,7 @@ export function Header({
   const modelDisplay = currentModel
     ? (() => {
         const [provider, model] = currentModel.includes('/') ? currentModel.split('/') : ['', currentModel];
-        return { provider, model, full: currentModel };
+        return { provider, model, full: currentModel, display: provider ? `${provider}/${model}` : model };
       })()
     : null;
 
@@ -226,7 +226,7 @@ export function Header({
               )}
               {agentDisplay.displayName && (trackerName || modelDisplay) && <span fg={colors.fg.dim}> | </span>}
               {modelDisplay && (
-                <span fg={colors.accent.primary}>{modelDisplay.provider}/{modelDisplay.model}</span>
+                <span fg={colors.accent.primary}>{modelDisplay.display}</span>
               )}
               {(agentDisplay.displayName || modelDisplay) && trackerName && <span fg={colors.fg.dim}> | </span>}
               {trackerName && <span fg={colors.accent.tertiary}>{trackerName}</span>}
