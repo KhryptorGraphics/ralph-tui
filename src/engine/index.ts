@@ -734,6 +734,7 @@ export class ExecutionEngine {
       const handle = this.agent!.execute(prompt, [], {
         cwd: this.config.cwd,
         flags,
+        sandbox: this.config.sandbox,
         subagentTracing: supportsTracing,
         onStdout: (data) => {
           this.state.currentOutput += data;
