@@ -75,9 +75,19 @@ export function getUserConfigDir(): string {
 }
 
 /**
+ * Get the template filename for a tracker type.
+ * @param trackerType The tracker type
+ * @returns The template filename (e.g., "beads.hbs")
+ */
+export function getTemplateFilename(trackerType: BuiltinTemplateType): string {
+  return `${trackerType}.hbs`;
+}
+
+/**
  * Get the default prompt filename for a tracker type.
  * @param trackerType The tracker type
- * @returns The default prompt filename
+ * @returns The default prompt filename (legacy .md format)
+ * @deprecated Use getTemplateFilename() for .hbs templates
  */
 export function getDefaultPromptFilename(trackerType: BuiltinTemplateType): string {
   switch (trackerType) {
@@ -91,22 +101,44 @@ export function getDefaultPromptFilename(trackerType: BuiltinTemplateType): stri
 }
 
 /**
- * Get the path to the default user prompt file for a tracker type.
+ * Get the path to a template in the project's .ralph-tui/templates/ folder.
+ * @param cwd The working directory (project root)
+ * @param trackerType The tracker type
+ * @returns Full path to the project-level template
+ */
+export function getProjectTemplatePath(cwd: string, trackerType: BuiltinTemplateType): string {
+  return path.join(cwd, '.ralph-tui', 'templates', getTemplateFilename(trackerType));
+}
+
+/**
+ * Get the path to a template in the global ~/.config/ralph-tui/templates/ folder.
+ * @param trackerType The tracker type
+ * @returns Full path to the global template
+ */
+export function getGlobalTemplatePath(trackerType: BuiltinTemplateType): string {
+  return path.join(getUserConfigDir(), 'templates', getTemplateFilename(trackerType));
+}
+
+/**
+ * Get the path to the default user prompt file for a tracker type (legacy).
  * @param trackerType The tracker type
  * @returns Full path to the user prompt file in config directory
+ * @deprecated Use getGlobalTemplatePath() for .hbs templates
  */
 export function getUserPromptPath(trackerType: BuiltinTemplateType): string {
   return path.join(getUserConfigDir(), getDefaultPromptFilename(trackerType));
 }
 
 /**
- * Load a template from a custom path or fall back to user config, tracker, or built-in.
+ * Load a template from a custom path or fall back through the resolution hierarchy.
  *
  * Resolution order:
  * 1. customPath (explicit --prompt argument or config file prompt_template)
- * 2. ~/.config/ralph-tui/{mode-specific}.md (user config directory)
- * 3. trackerTemplate (from tracker plugin's getTemplate())
- * 4. Built-in template (bundled default - fallback for backward compatibility)
+ * 2. Project: ./.ralph-tui/templates/{tracker}.hbs (project-level customization)
+ * 3. Global: ~/.config/ralph-tui/templates/{tracker}.hbs (user-level customization)
+ * 4. Legacy: ~/.config/ralph-tui/{mode-specific}.md (backward compatibility)
+ * 5. trackerTemplate (from tracker plugin's getTemplate())
+ * 6. Built-in template (bundled default - final fallback)
  *
  * @param customPath Optional path to custom template
  * @param trackerType Tracker type for user config and built-in template fallback
@@ -150,7 +182,37 @@ export function loadTemplate(
     }
   }
 
-  // 2. Try user config directory prompt file
+  // 2. Try project-level template: ./.ralph-tui/templates/{tracker}.hbs
+  const projectTemplatePath = getProjectTemplatePath(cwd, trackerType);
+  try {
+    if (fs.existsSync(projectTemplatePath)) {
+      const content = fs.readFileSync(projectTemplatePath, 'utf-8');
+      return {
+        success: true,
+        content,
+        source: `project:${projectTemplatePath}`,
+      };
+    }
+  } catch {
+    // Silently fall through to next level
+  }
+
+  // 3. Try global template: ~/.config/ralph-tui/templates/{tracker}.hbs
+  const globalTemplatePath = getGlobalTemplatePath(trackerType);
+  try {
+    if (fs.existsSync(globalTemplatePath)) {
+      const content = fs.readFileSync(globalTemplatePath, 'utf-8');
+      return {
+        success: true,
+        content,
+        source: `global:${globalTemplatePath}`,
+      };
+    }
+  } catch {
+    // Silently fall through to legacy path
+  }
+
+  // 4. Try legacy user config directory prompt file: ~/.config/ralph-tui/{mode}.md
   const userPromptPath = getUserPromptPath(trackerType);
   try {
     if (fs.existsSync(userPromptPath)) {
@@ -158,14 +220,14 @@ export function loadTemplate(
       return {
         success: true,
         content,
-        source: userPromptPath,
+        source: `legacy:${userPromptPath}`,
       };
     }
   } catch {
     // Silently fall through to tracker or built-in template
   }
 
-  // 3. Use tracker-provided template (from plugin's getTemplate())
+  // 5. Use tracker-provided template (from plugin's getTemplate())
   if (trackerTemplate) {
     return {
       success: true,
@@ -174,7 +236,7 @@ export function loadTemplate(
     };
   }
 
-  // 4. Fallback to built-in template (for backward compatibility)
+  // 6. Fallback to built-in template (for backward compatibility)
   const content = getBuiltinTemplate(trackerType);
   return {
     success: true,
@@ -572,4 +634,104 @@ export function initializeUserPrompts(force = false): {
 
   const success = results.every((r) => r.created || r.skipped);
   return { success, results };
+}
+
+/**
+ * Result of installing a single template.
+ */
+export interface TemplateInstallResult {
+  /** Template filename */
+  file: string;
+  /** Whether the file was created */
+  created: boolean;
+  /** Whether the file was skipped (already exists) */
+  skipped: boolean;
+  /** Error message if installation failed */
+  error?: string;
+}
+
+/**
+ * Install templates to the global config directory.
+ * Creates ~/.config/ralph-tui/templates/ and copies tracker templates.
+ *
+ * @param templates Map of tracker type to template content
+ * @param force Overwrite existing files
+ * @returns Results for each template
+ */
+export function installGlobalTemplates(
+  templates: Record<string, string>,
+  force = false
+): {
+  success: boolean;
+  templatesDir: string;
+  results: TemplateInstallResult[];
+} {
+  const templatesDir = path.join(getUserConfigDir(), 'templates');
+  const results: TemplateInstallResult[] = [];
+
+  // Ensure templates directory exists
+  try {
+    if (!fs.existsSync(templatesDir)) {
+      fs.mkdirSync(templatesDir, { recursive: true });
+    }
+  } catch (error) {
+    return {
+      success: false,
+      templatesDir,
+      results: [{
+        file: templatesDir,
+        created: false,
+        skipped: false,
+        error: `Failed to create templates directory: ${error instanceof Error ? error.message : String(error)}`,
+      }],
+    };
+  }
+
+  // Install each template
+  for (const [trackerType, content] of Object.entries(templates)) {
+    const filename = getTemplateFilename(trackerType as BuiltinTemplateType);
+    const filePath = path.join(templatesDir, filename);
+
+    try {
+      if (fs.existsSync(filePath) && !force) {
+        results.push({ file: filename, created: false, skipped: true });
+        continue;
+      }
+
+      fs.writeFileSync(filePath, content, 'utf-8');
+      results.push({ file: filename, created: true, skipped: false });
+    } catch (error) {
+      results.push({
+        file: filename,
+        created: false,
+        skipped: false,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const success = results.every((r) => r.created || r.skipped);
+  return { success, templatesDir, results };
+}
+
+/**
+ * Install built-in templates to the global config directory.
+ * Copies default, beads, beads-bv, and json templates.
+ *
+ * @param force Overwrite existing files
+ * @returns Results for each template
+ */
+export function installBuiltinTemplates(force = false): {
+  success: boolean;
+  templatesDir: string;
+  results: TemplateInstallResult[];
+} {
+  const templates: Record<string, string> = {
+    'default': DEFAULT_TEMPLATE,
+    'beads': BEADS_TEMPLATE,
+    'beads-bv': BEADS_BV_TEMPLATE,
+    'json': JSON_TEMPLATE,
+  };
+
+  return installGlobalTemplates(templates, force);
 }
