@@ -346,17 +346,17 @@ function computeBeadsDbPath(config: Partial<RalphConfig>): string {
  * @param task The current task
  * @param config The ralph configuration
  * @param epic Optional epic information
- * @param recentProgress Optional recent progress summary
+ * @param extended Extended context with progress, patterns, PRD data - or just a progress string
  * @returns The template context
  */
 export function buildTemplateContext(
   task: TrackerTask,
   config: Partial<RalphConfig>,
   epic?: { id: string; title: string; description?: string },
-  recentProgress?: string
+  extended?: string | ExtendedTemplateContext
 ): TemplateContext {
   return {
-    vars: buildTemplateVariables(task, config, epic, recentProgress),
+    vars: buildTemplateVariables(task, config, epic, extended),
     task,
     config,
     epic,
@@ -393,7 +393,7 @@ function compileTemplate(
  * @param task The current task
  * @param config The ralph configuration
  * @param epic Optional epic information
- * @param recentProgress Optional recent progress summary from previous iterations
+ * @param extended Extended context with progress, patterns, PRD data - or just a progress string for backward compat
  * @param trackerTemplate Optional template from the tracker plugin's getTemplate()
  * @returns The render result with the prompt or error
  */
@@ -401,7 +401,7 @@ export function renderPrompt(
   task: TrackerTask,
   config: RalphConfig,
   epic?: { id: string; title: string; description?: string },
-  recentProgress?: string,
+  extended?: string | ExtendedTemplateContext,
   trackerTemplate?: string
 ): TemplateRenderResult {
   // Determine template to use
@@ -419,7 +419,7 @@ export function renderPrompt(
   }
 
   // Build context
-  const context = buildTemplateContext(task, config, epic, recentProgress);
+  const context = buildTemplateContext(task, config, epic, extended);
 
   // Create a flat context for Handlebars (variables at top level)
   const flatContext = {

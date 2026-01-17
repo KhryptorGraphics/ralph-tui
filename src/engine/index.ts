@@ -61,6 +61,7 @@ const PRIMARY_RECOVERY_TEST_PROMPT = 'Reply with just the word "ok".';
  * Build prompt for the agent based on task using the template system.
  * Falls back to a hardcoded default if template rendering fails.
  * Includes recent progress from previous iterations for context.
+ * Includes PRD context if the tracker provides it.
  * Uses the tracker's getTemplate() method for plugin-owned templates.
  */
 async function buildPrompt(
@@ -74,8 +75,17 @@ async function buildPrompt(
   // Get template from tracker plugin (new architecture: templates owned by plugins)
   const trackerTemplate = tracker?.getTemplate();
 
+  // Get PRD context if the tracker supports it
+  const prdContext = await tracker?.getPrdContext?.();
+
+  // Build extended template context with PRD data
+  const extendedContext = {
+    recentProgress,
+    prd: prdContext ?? undefined,
+  };
+
   // Use the template system (tracker template used if no custom/user override)
-  const result = renderPrompt(task, config, undefined, recentProgress, trackerTemplate);
+  const result = renderPrompt(task, config, undefined, extendedContext, trackerTemplate);
 
   if (result.success && result.prompt) {
     return result.prompt;
@@ -285,6 +295,56 @@ export class ExecutionEngine {
       timestamp: new Date().toISOString(),
       tasks,
     });
+  }
+
+  /**
+   * Generate a preview of the prompt that would be sent to the agent for a given task.
+   * Useful for debugging and understanding what the agent will receive.
+   *
+   * @param taskId - The ID of the task to generate prompt for
+   * @returns Object with prompt content and template source, or error message
+   */
+  async generatePromptPreview(
+    taskId: string
+  ): Promise<{ success: true; prompt: string; source: string } | { success: false; error: string }> {
+    if (!this.tracker) {
+      return { success: false, error: 'No tracker configured' };
+    }
+
+    // Get the task
+    const tasks = await this.tracker.getTasks({ status: ['open', 'in_progress'] });
+    const task = tasks.find((t) => t.id === taskId);
+    if (!task) {
+      return { success: false, error: `Task not found: ${taskId}` };
+    }
+
+    // Get tracker template (if tracker provides one)
+    const trackerTemplate = this.tracker.getTemplate?.();
+
+    // Get recent progress summary for context
+    const recentProgress = await getRecentProgressSummary(this.config.cwd, 5);
+
+    // Get PRD context if the tracker supports it
+    const prdContext = await this.tracker.getPrdContext?.();
+
+    // Build extended template context with PRD data
+    const extendedContext = {
+      recentProgress,
+      prd: prdContext ?? undefined,
+    };
+
+    // Generate the prompt
+    const result = renderPrompt(task, this.config, undefined, extendedContext, trackerTemplate);
+
+    if (!result.success || !result.prompt) {
+      return { success: false, error: result.error ?? 'Unknown error generating prompt' };
+    }
+
+    return {
+      success: true,
+      prompt: result.prompt,
+      source: result.source ?? 'unknown',
+    };
   }
 
   /**
