@@ -130,7 +130,17 @@ retryDelayMs = 5000
 
 ## Skills Installation
 
-Skills are installed to your agent's skills directory:
+Skills are installed to your agent's skills directory. Each detected agent receives a copy of the bundled skills:
+
+### Skills Locations by Agent
+
+| Agent | Skills Directory |
+|-------|------------------|
+| Claude Code | `~/.claude/skills/` |
+| OpenCode | `~/.config/opencode/skills/` |
+| Factory Droid | `~/.factory/skills/` |
+
+### Bundled Skills
 
 | Skill | Purpose |
 |-------|---------|
@@ -206,8 +216,10 @@ Ensure the skills directory is writable:
 # Check which directory skills are installed to
 ralph-tui skills list
 
-# Create skills directory if needed (for Claude Code)
-mkdir -p ~/.claude/skills
+# Create skills directory if needed (per agent)
+mkdir -p ~/.claude/skills           # Claude Code
+mkdir -p ~/.config/opencode/skills  # OpenCode
+mkdir -p ~/.factory/skills          # Factory Droid
 ```
 
 ## Using Skills Directly
