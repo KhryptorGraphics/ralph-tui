@@ -13,6 +13,7 @@ import {
   formatSystemInfo,
   formatForBugReport,
   parseCwdArg,
+  computePackageJsonPath,
   type SystemInfo,
 } from './info.js';
 
@@ -65,6 +66,23 @@ describe('collectSystemInfo', () => {
     expect(info).toHaveProperty('templates');
     expect(info).toHaveProperty('agent');
     expect(info).toHaveProperty('tracker');
+    expect(info).toHaveProperty('skills');
+  });
+
+  test('collects skills info', async () => {
+    await writeConfig(tempDir, {
+      agent: 'claude',
+    });
+
+    const info = await collectSystemInfo(tempDir);
+
+    // Check skills structure
+    expect(info.skills).toHaveProperty('bundled');
+    expect(info.skills).toHaveProperty('customDir');
+    expect(info.skills).toHaveProperty('customSkills');
+    expect(info.skills).toHaveProperty('agents');
+    expect(Array.isArray(info.skills.bundled)).toBe(true);
+    expect(Array.isArray(info.skills.agents)).toBe(true);
   });
 
   test('detects runtime correctly', async () => {
@@ -166,6 +184,21 @@ describe('formatSystemInfo', () => {
     tracker: {
       name: 'beads',
     },
+    skills: {
+      bundled: ['ralph-tui-prd', 'ralph-tui-create-beads'],
+      customDir: null,
+      customSkills: [],
+      agents: [
+        {
+          id: 'claude',
+          name: 'Claude Code',
+          available: true,
+          personalDir: '/home/user/.claude/skills',
+          repoDir: '.claude/skills',
+          personalSkills: ['ralph-tui-prd'],
+        },
+      ],
+    },
   };
 
   test('includes version info', () => {
@@ -212,6 +245,16 @@ describe('formatSystemInfo', () => {
     const output = formatSystemInfo(mockInfo);
 
     expect(output).toContain('Configured: beads');
+  });
+
+  test('includes skills info', () => {
+    const output = formatSystemInfo(mockInfo);
+
+    expect(output).toContain('Skills:');
+    expect(output).toContain('Bundled: ralph-tui-prd, ralph-tui-create-beads');
+    expect(output).toContain('Claude Code:');
+    expect(output).toContain('Path: /home/user/.claude/skills');
+    expect(output).toContain('Installed: ralph-tui-prd');
   });
 
   test('shows no project config when missing', () => {
@@ -290,6 +333,21 @@ describe('formatForBugReport', () => {
     tracker: {
       name: 'beads',
     },
+    skills: {
+      bundled: ['ralph-tui-prd', 'ralph-tui-create-beads'],
+      customDir: null,
+      customSkills: [],
+      agents: [
+        {
+          id: 'claude',
+          name: 'Claude Code',
+          available: true,
+          personalDir: '/home/user/.claude/skills',
+          repoDir: '.claude/skills',
+          personalSkills: ['ralph-tui-prd'],
+        },
+      ],
+    },
   };
 
   test('wraps output in code block', () => {
@@ -349,6 +407,13 @@ describe('formatForBugReport', () => {
 
     expect(output).toContain('templates: none');
   });
+
+  test('includes skills info', () => {
+    const output = formatForBugReport(mockInfo);
+
+    expect(output).toContain('bundled-skills: 2');
+    expect(output).toContain('skills-installed: claude:1');
+  });
 });
 
 describe('parseCwdArg', () => {
@@ -398,5 +463,34 @@ describe('parseCwdArg', () => {
     const result = parseCwdArg([]);
 
     expect(result).toBe(process.cwd());
+  });
+});
+
+describe('computePackageJsonPath', () => {
+  test('resolves from dist directory (bundled)', () => {
+    // When bundled, the code lives in dist/cli.js so dirname is dist/
+    const result = computePackageJsonPath('/app/dist');
+
+    expect(result).toBe('/app/package.json');
+  });
+
+  test('resolves from src/commands directory (development)', () => {
+    // In development, this file is at src/commands/info.ts
+    const result = computePackageJsonPath('/app/src/commands');
+
+    expect(result).toBe('/app/package.json');
+  });
+
+  test('handles Windows-style dist path', () => {
+    const result = computePackageJsonPath('C:\\app\\dist');
+
+    expect(result).toContain('package.json');
+  });
+
+  test('handles path ending with dist', () => {
+    // Ensure paths that end with 'dist' are detected correctly
+    const result = computePackageJsonPath('/some/path/dist');
+
+    expect(result).toBe('/some/path/package.json');
   });
 });

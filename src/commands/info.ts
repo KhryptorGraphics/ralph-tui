@@ -1,42 +1,88 @@
 /**
  * ABOUTME: System info command for ralph-tui.
  * Outputs diagnostic information useful for bug reports.
- * Collects version info, config paths, and environment details.
+ * Collects version info, config paths, environment details, and skills.
  */
 
 import { platform, release, arch } from 'node:os';
-import { join } from 'node:path';
-import { access, constants, readFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+import { access, constants, readFile, readdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 import { loadStoredConfigWithSource, CONFIG_PATHS } from '../config/index.js';
 import { getAgentRegistry } from '../plugins/agents/registry.js';
 import { registerBuiltinAgents } from '../plugins/agents/builtin/index.js';
 import { registerBuiltinTrackers } from '../plugins/trackers/builtin/index.js';
 import { getUserConfigDir } from '../templates/engine.js';
+import { listBundledSkills, resolveSkillsPath } from '../setup/skill-installer.js';
 
-// Package version - imported at runtime
-let packageVersion = 'unknown';
-try {
-  // Try to read from package.json in various locations
-  const possiblePaths = [
-    join(__dirname, '../../package.json'),
-    join(__dirname, '../package.json'),
-    join(process.cwd(), 'package.json'),
-  ];
-  for (const p of possiblePaths) {
-    try {
-      const pkg = await readFile(p, 'utf-8');
-      const parsed = JSON.parse(pkg);
-      if (parsed.name === 'ralph-tui') {
-        packageVersion = parsed.version;
-        break;
-      }
-    } catch {
-      // Try next path
-    }
+/**
+ * Compute the path to package.json based on the current module location.
+ * Works in both development (src/) and bundled (dist/) environments.
+ *
+ * @param currentDir - The directory where the code is running from
+ * @returns The computed path to package.json
+ */
+export function computePackageJsonPath(currentDir: string): string {
+  // When bundled by bun, all code is in dist/cli.js (single file bundle).
+  // package.json is at the package root (one level up from dist/).
+  // In development, this file is at src/commands/info.ts,
+  // and package.json is at the project root (up 2 levels).
+  if (currentDir.endsWith('dist') || currentDir.includes('/dist/') || currentDir.includes('\\dist\\')) {
+    return join(currentDir, '..', 'package.json');
   }
-} catch {
-  // Version remains unknown
+  return join(currentDir, '..', '..', 'package.json');
+}
+
+/**
+ * Get the package version from package.json.
+ * Uses import.meta.url for correct path resolution in ESM bundles.
+ */
+async function getPackageVersion(): Promise<string> {
+  try {
+    const currentDir = dirname(fileURLToPath(import.meta.url));
+    const packageJsonPath = computePackageJsonPath(currentDir);
+    const pkg = await readFile(packageJsonPath, 'utf-8');
+    const parsed = JSON.parse(pkg);
+    if (parsed.name === 'ralph-tui' && parsed.version) {
+      return parsed.version;
+    }
+  } catch {
+    // Fall through to unknown
+  }
+  return 'unknown';
+}
+
+/**
+ * Information about an agent's skills installation status.
+ */
+export interface AgentSkillsInfo {
+  /** Agent plugin ID */
+  id: string;
+  /** Agent display name */
+  name: string;
+  /** Whether the agent is available/detected */
+  available: boolean;
+  /** Personal skills directory path */
+  personalDir: string;
+  /** Repo skills directory pattern */
+  repoDir: string;
+  /** Skills installed in personal directory */
+  personalSkills: string[];
+}
+
+/**
+ * Skills information for the system info output.
+ */
+export interface SkillsInfo {
+  /** Bundled skills available for installation */
+  bundled: string[];
+  /** Custom skills directory (from config) */
+  customDir: string | null;
+  /** Skills found in custom directory */
+  customSkills: string[];
+  /** Per-agent skills information */
+  agents: AgentSkillsInfo[];
 }
 
 /**
@@ -98,12 +144,109 @@ export interface SystemInfo {
     /** Configured tracker name */
     name: string;
   };
+
+  /** Skills info */
+  skills: SkillsInfo;
+}
+
+/**
+ * List skill directories found in a given path.
+ * Skills are identified by having a SKILL.md file.
+ */
+async function listSkillsInDir(skillsDir: string): Promise<string[]> {
+  const skills: string[] = [];
+  try {
+    const entries = await readdir(skillsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const skillMdPath = join(skillsDir, entry.name, 'SKILL.md');
+        try {
+          await access(skillMdPath, constants.F_OK);
+          skills.push(entry.name);
+        } catch {
+          // Not a skill directory
+        }
+      }
+    }
+  } catch {
+    // Directory doesn't exist or can't read
+  }
+  return skills;
+}
+
+/**
+ * Collect skills information from all sources.
+ */
+async function collectSkillsInfo(
+  agentRegistry: ReturnType<typeof getAgentRegistry>,
+  customSkillsDir: string | null,
+  cwd: string
+): Promise<SkillsInfo> {
+  // Get bundled skills
+  const bundledSkills = await listBundledSkills();
+  const bundledNames = bundledSkills.map((s) => s.name);
+
+  // Check custom skills directory
+  let customSkills: string[] = [];
+  let resolvedCustomDir: string | null = null;
+  if (customSkillsDir) {
+    resolvedCustomDir = resolveSkillsPath(customSkillsDir, cwd);
+    customSkills = await listSkillsInDir(resolvedCustomDir);
+  }
+
+  // Get per-agent skills info
+  const agents: AgentSkillsInfo[] = [];
+  const plugins = agentRegistry.getRegisteredPlugins();
+
+  for (const meta of plugins) {
+    // Skip agents without skillsPaths defined
+    if (!meta.skillsPaths) {
+      continue;
+    }
+
+    // Check if agent is available
+    const instance = agentRegistry.createInstance(meta.id);
+    let available = false;
+    if (instance) {
+      try {
+        const detectResult = await instance.detect();
+        available = detectResult.available;
+      } catch {
+        available = false;
+      } finally {
+        await instance.dispose();
+      }
+    }
+
+    // Get installed skills in personal directory
+    const personalDir = resolveSkillsPath(meta.skillsPaths.personal);
+    const personalSkills = await listSkillsInDir(personalDir);
+
+    agents.push({
+      id: meta.id,
+      name: meta.name,
+      available,
+      personalDir,
+      repoDir: meta.skillsPaths.repo,
+      personalSkills,
+    });
+  }
+
+  return {
+    bundled: bundledNames,
+    customDir: resolvedCustomDir,
+    customSkills,
+    agents,
+  };
 }
 
 /**
  * Collect system information for bug reports
  */
 export async function collectSystemInfo(cwd: string = process.cwd()): Promise<SystemInfo> {
+  // Get version first (async)
+  const version = await getPackageVersion();
+
   // Load config with source info
   const { config, source } = await loadStoredConfigWithSource(cwd);
 
@@ -120,7 +263,6 @@ export async function collectSystemInfo(cwd: string = process.cwd()): Promise<Sy
   const templatesDir = join(getUserConfigDir(), 'templates');
   const installedTemplates: string[] = [];
   try {
-    const { readdir } = await import('node:fs/promises');
     const files = await readdir(templatesDir);
     installedTemplates.push(...files.filter((f) => f.endsWith('.hbs')));
   } catch {
@@ -157,12 +299,15 @@ export async function collectSystemInfo(cwd: string = process.cwd()): Promise<Sy
   registerBuiltinTrackers();
   const trackerName = config.tracker ?? 'beads';
 
+  // Collect skills info
+  const skills = await collectSkillsInfo(agentRegistry, config.skills_dir ?? null, cwd);
+
   // Determine runtime
   const isBun = typeof Bun !== 'undefined';
   const runtimeVersion = isBun ? Bun.version : process.version;
 
   return {
-    version: packageVersion,
+    version,
     runtime: {
       name: isBun ? 'bun' : 'node',
       version: runtimeVersion,
@@ -191,6 +336,7 @@ export async function collectSystemInfo(cwd: string = process.cwd()): Promise<Sy
     tracker: {
       name: trackerName,
     },
+    skills,
   };
 }
 
@@ -247,6 +393,23 @@ export function formatSystemInfo(info: SystemInfo): string {
   // Tracker info
   lines.push('Tracker:');
   lines.push(`  Configured: ${info.tracker.name}`);
+  lines.push('');
+
+  // Skills info
+  lines.push('Skills:');
+  lines.push(`  Bundled: ${info.skills.bundled.length > 0 ? info.skills.bundled.join(', ') : '(none)'}`);
+
+  if (info.skills.customDir) {
+    lines.push(`  Custom directory: ${info.skills.customDir}`);
+    lines.push(`    Installed: ${info.skills.customSkills.length > 0 ? info.skills.customSkills.join(', ') : '(none)'}`);
+  }
+
+  for (const agent of info.skills.agents) {
+    const status = agent.available ? '' : ' (not detected)';
+    lines.push(`  ${agent.name}${status}:`);
+    lines.push(`    Path: ${agent.personalDir}`);
+    lines.push(`    Installed: ${agent.personalSkills.length > 0 ? agent.personalSkills.join(', ') : '(none)'}`);
+  }
 
   return lines.join('\n');
 }
@@ -266,6 +429,14 @@ export function formatForBugReport(info: SystemInfo): string {
   lines.push(`global-config: ${info.config.globalExists ? 'yes' : 'no'}`);
   lines.push(`project-config: ${info.config.projectExists ? 'yes' : 'no'}`);
   lines.push(`templates: ${info.templates.installed.length > 0 ? info.templates.installed.join(', ') : 'none'}`);
+  lines.push(`bundled-skills: ${info.skills.bundled.length}`);
+
+  // Summarize installed skills per agent
+  const skillsSummary = info.skills.agents
+    .map((a) => `${a.id}:${a.personalSkills.length}`)
+    .join(', ');
+  lines.push(`skills-installed: ${skillsSummary || 'none'}`);
+
   lines.push('```');
 
   return lines.join('\n');
@@ -333,6 +504,7 @@ ${BOLD}Description:${RESET}
   - Installed templates
   - Agent detection status
   - Tracker configuration
+  - Installed skills (per agent and custom directory)
 
 ${BOLD}Examples:${RESET}
   ${CYAN}ralph-tui info${RESET}              # Display system info
