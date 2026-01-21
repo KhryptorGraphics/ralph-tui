@@ -167,6 +167,19 @@ export class CodexAgentPlugin extends BaseAgentPlugin {
     }
   }
 
+  override getSandboxRequirements() {
+    return {
+      authPaths: ['~/.codex', '~/.config/codex', '~/.local/share/codex'],
+      binaryPaths: [
+        '/usr/local/bin',
+        '~/.local/bin',
+        '~/.local/share/mise/installs',
+      ],
+      runtimePaths: [],
+      requiresNetwork: true,
+    };
+  }
+
   override async detect(): Promise<AgentDetectResult> {
     const command = this.commandPath ?? this.meta.defaultCommand;
     const findResult = await findCommandPath(command);
@@ -309,8 +322,8 @@ export class CodexAgentPlugin extends BaseAgentPlugin {
     // Sandbox mode
     args.push('--sandbox', this.sandbox);
 
-    // Note: Prompt is passed via stdin (see getStdinInput) to avoid
-    // Windows shell interpretation issues with special characters.
+    // Use '-' to tell Codex to read prompt from stdin (per CLI reference docs)
+    args.push('-');
 
     return args;
   }
