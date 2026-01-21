@@ -6,8 +6,8 @@
  */
 
 import { spawn } from 'node:child_process';
-import { access, constants } from 'node:fs/promises';
-import { readFileSync } from 'node:fs';
+import { access } from 'node:fs/promises';
+import { readFileSync, constants } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BeadsTrackerPlugin } from '../beads/index.js';
@@ -436,9 +436,11 @@ export class BeadsBvTrackerPlugin extends BeadsTrackerPlugin {
         );
       }
 
-      // Return the top recommendation
+      // Return the top recommendation, or fall back to base beads if no bv matches
+      // This handles the case where bv's global top-N recommendations don't include
+      // any tasks from the current epic (e.g., when working on a less-prominent epic)
       if (recommendations.length === 0) {
-        return undefined;
+        return super.getNextTask(filter);
       }
 
       const topRec = recommendations[0]!;

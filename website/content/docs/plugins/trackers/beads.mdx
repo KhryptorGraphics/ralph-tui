@@ -26,26 +26,22 @@ This creates a `.beads/` directory with your issue tracker.
 
 ## Basic Usage
 
-<Callout type="warning">
-**Important:** By default, Ralph TUI only shows issues with the `ralph` label. Either add this label to your issues, or change the label filter during setup (leave blank to see all issues).
-</Callout>
-
 <Steps>
   <Step title="Create an Epic">
-    Epics group related tasks. Add the `ralph` label so Ralph TUI can see it:
+    Epics group related tasks:
 
     ```bash
-    bd create --title "User Authentication" --type epic --label ralph
+    bd create --title "User Authentication" --type epic
     # Created: beads-abc123
     ```
   </Step>
 
   <Step title="Add Tasks as Children of the Epic">
-    Tasks must be **children** of the epic (using `--parent`) to appear when running with `--epic`. Also add the `ralph` label:
+    Tasks must be **children** of the epic (using `--parent`) to appear when running with `--epic`:
 
     ```bash
-    bd create --title "Login form" --type task --parent beads-abc123 --label ralph
-    bd create --title "Auth API" --type task --parent beads-abc123 --label ralph
+    bd create --title "Login form" --type task --parent beads-abc123
+    bd create --title "Auth API" --type task --parent beads-abc123
     ```
 
     <Callout type="info">
@@ -91,7 +87,7 @@ tracker = "beads"
 
 [trackerOptions]
 beadsDir = ".beads"
-labels = "ralph"
+# labels = "frontend,backend"  # Optional: filter by labels
 ```
 
 ### Options Reference
@@ -100,7 +96,7 @@ labels = "ralph"
 |--------|------|---------|-------------|
 | `beadsDir` | string | `.beads` | Path to .beads directory |
 | `epicId` | string | - | Epic ID to filter tasks (set via `--epic` flag) |
-| `labels` | string | `ralph` | Comma-separated label filter (issues must have these labels) |
+| `labels` | string | (empty) | Optional comma-separated label filter |
 | `workingDir` | string | `.` | Working directory for bd commands |
 
 <Callout type="info">
@@ -190,31 +186,31 @@ git pull
 
 Ralph TUI calls `bd sync` automatically when you run.
 
-## Label Filtering
+## Label Filtering (Optional)
 
-By default, Ralph TUI filters to issues with the `ralph` label. This lets you separate "Ralph-managed" work from other issues in the same beads repo.
+You can optionally filter issues by labels to separate different types of work in the same beads repo.
 
 ### Adding Labels to Issues
 
 ```bash
 # Add label when creating
-bd create --title "My task" --type task --label ralph
+bd create --title "My task" --type task --label frontend
 
 # Add label to existing issue
-bd label add beads-xyz ralph
+bd label add beads-xyz backend
 ```
 
-### Changing the Label Filter
+### Configuring the Label Filter
 
 ```toml
 # .ralph-tui/config.toml
 [trackerOptions]
-labels = "ralph,frontend"  # Multiple labels (comma-separated)
-# labels = ""              # Empty = show all issues (no filter)
+labels = "frontend,backend"  # Only show issues with these labels
+# labels = ""                # Empty (default) = show all issues
 ```
 
-<Callout type="warning">
-If no tasks appear, check that your issues have the `ralph` label (or whatever labels you configured).
+<Callout type="info">
+By default, no label filter is applied - all issues are visible. Configure labels if you want to filter.
 </Callout>
 
 ## How It Works
@@ -266,10 +262,10 @@ Install the Beads CLI from the **[Beads GitHub repo](https://github.com/steveyeg
 ### "No tasks available"
 
 Check that:
-1. **Tasks have the `ralph` label**: `bd list --label ralph` (or run `bd label add <task> ralph`)
-2. **Tasks are children of the epic**: `bd list --parent <epic>` (create with `--parent <epic>`)
-3. **Tasks are `open` status**: `bd list --status open`
-4. **Dependencies are met**: `bd show <task-id>` (blocked tasks won't be selected)
+1. **Tasks are children of the epic**: `bd list --parent <epic>` (create with `--parent <epic>`)
+2. **Tasks are `open` status**: `bd list --status open`
+3. **Dependencies are met**: `bd show <task-id>` (blocked tasks won't be selected)
+4. **Label filter matches** (if configured): `bd list --label <your-label>`
 
 ### "Tasks not syncing"
 

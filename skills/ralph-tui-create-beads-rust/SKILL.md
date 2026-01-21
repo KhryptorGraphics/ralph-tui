@@ -1,24 +1,24 @@
 ---
-name: ralph-tui-create-beads
-description: "Convert PRDs to beads for ralph-tui execution. Creates an epic with child beads for each user story. Use when you have a PRD and want to use ralph-tui with beads as the task source. Triggers on: create beads, convert prd to beads, beads for ralph, ralph beads."
+name: ralph-tui-create-beads-rust
+description: "Convert PRDs to beads for ralph-tui execution using beads-rust (br CLI). Creates an epic with child beads for each user story. Use when you have a PRD and want to use ralph-tui with beads-rust as the task source. Triggers on: create beads, convert prd to beads, beads for ralph, ralph beads, br beads."
 ---
 
-# Ralph TUI - Create Beads
+# Ralph TUI - Create Beads (beads-rust)
 
-Converts PRDs to beads (epic + child tasks) for ralph-tui autonomous execution.
+Converts PRDs to beads (epic + child tasks) for ralph-tui autonomous execution using **beads-rust** (`br` CLI).
 
-> **Note:** This skill is bundled with ralph-tui's Beads tracker plugin. Future tracker plugins (Linear, GitHub Issues, etc.) will bundle their own task creation skills.
+> **Note:** This skill uses the `br` command from beads-rust. If you have the original beads (`bd`) installed instead, use the `ralph-tui-create-beads` skill.
 
 ---
 
 ## The Job
 
-Take a PRD (markdown file or text) and create beads in `.beads/beads.jsonl`:
+Take a PRD (markdown file or text) and create beads using `br` commands:
 1. **Extract Quality Gates** from the PRD's "Quality Gates" section
 2. Create an **epic** bead for the feature
 3. Create **child beads** for each user story (with quality gates appended)
 4. Set up **dependencies** between beads (schema → backend → UI)
-5. Output ready for `ralph-tui run --tracker beads`
+5. Output ready for `ralph-tui run --tracker beads-rust`
 
 ---
 
@@ -47,17 +47,17 @@ Extract:
 
 ## Output Format
 
-Beads use `bd create` command:
+Beads use `br create` command:
 
 ```bash
 # Create epic (link back to source PRD)
-bd create --type=epic \
+br create --type=epic \
   --title="[Feature Name]" \
   --description="[Feature description from PRD]" \
   --external-ref="prd:./tasks/feature-name-prd.md"
 
 # Create child bead (with quality gates in acceptance criteria)
-bd create \
+br create \
   --parent=EPIC_ID \
   --title="[Story Title]" \
   --description="[Story description with acceptance criteria INCLUDING quality gates]" \
@@ -103,22 +103,22 @@ Stories execute in dependency order. Earlier stories must not depend on later on
 
 ---
 
-## Dependencies with `bd dep add`
+## Dependencies with `br dep add`
 
-Use the `bd dep add` command to specify which beads must complete first:
+Use the `br dep add` command to specify which beads must complete first:
 
 ```bash
 # Create the beads first
-bd create --parent=epic-123 --title="US-001: Add schema" ...
-bd create --parent=epic-123 --title="US-002: Create API" ...
-bd create --parent=epic-123 --title="US-003: Build UI" ...
+br create --parent=epic-123 --title="US-001: Add schema" ...
+br create --parent=epic-123 --title="US-002: Create API" ...
+br create --parent=epic-123 --title="US-003: Build UI" ...
 
 # Then add dependencies (issue depends-on blocker)
-bd dep add ralph-tui-002 ralph-tui-001  # US-002 depends on US-001
-bd dep add ralph-tui-003 ralph-tui-002  # US-003 depends on US-002
+br dep add ralph-tui-002 ralph-tui-001  # US-002 depends on US-001
+br dep add ralph-tui-003 ralph-tui-002  # US-003 depends on US-002
 ```
 
-**Syntax:** `bd dep add <issue> <depends-on>` — the issue depends on (is blocked by) depends-on.
+**Syntax:** `br dep add <issue> <depends-on>` — the issue depends on (is blocked by) depends-on.
 
 ralph-tui will:
 - Show blocked beads as "blocked" until dependencies complete
@@ -231,13 +231,13 @@ For UI stories, also include:
 **Output beads:**
 ```bash
 # Create epic (link back to source PRD)
-bd create --type=epic \
+br create --type=epic \
   --title="Friends Outreach Track" \
   --description="Warm outreach for deck feedback" \
   --external-ref="prd:./tasks/friends-outreach-prd.md"
 
 # US-001: No deps (first - creates schema)
-bd create --parent=ralph-tui-abc \
+br create --parent=ralph-tui-abc \
   --title="US-001: Add investorType field to investor table" \
   --description="As a developer, I need to categorize investors as 'cold' or 'friend'.
 
@@ -249,7 +249,7 @@ bd create --parent=ralph-tui-abc \
   --priority=1
 
 # US-002: UI story (gets browser verification too)
-bd create --parent=ralph-tui-abc \
+br create --parent=ralph-tui-abc \
   --title="US-002: Add type toggle to investor list rows" \
   --description="As Ryan, I want to toggle investor type directly from the list.
 
@@ -263,10 +263,10 @@ bd create --parent=ralph-tui-abc \
   --priority=2
 
 # Add dependency: US-002 depends on US-001
-bd dep add ralph-tui-002 ralph-tui-001
+br dep add ralph-tui-002 ralph-tui-001
 
 # US-003: UI story
-bd create --parent=ralph-tui-abc \
+br create --parent=ralph-tui-abc \
   --title="US-003: Filter investors by type" \
   --description="As Ryan, I want to filter the list to see just friends or cold.
 
@@ -279,22 +279,34 @@ bd create --parent=ralph-tui-abc \
   --priority=3
 
 # Add dependency: US-003 depends on US-002
-bd dep add ralph-tui-003 ralph-tui-002
+br dep add ralph-tui-003 ralph-tui-002
 ```
+
+---
+
+## Syncing Changes
+
+After creating beads, sync to export to JSONL (for git tracking):
+
+```bash
+br sync --flush-only
+```
+
+This exports the SQLite database to `.beads/issues.jsonl` for version control.
 
 ---
 
 ## Output Location
 
-Beads are written to: `.beads/beads.jsonl`
+Beads are stored in: `.beads/` directory (SQLite DB + JSONL export)
 
 After creation, run ralph-tui:
 ```bash
 # Work on a specific epic
-ralph-tui run --tracker beads --epic ralph-tui-abc
+ralph-tui run --tracker beads-rust --epic ralph-tui-abc
 
 # Or let it pick the best task automatically
-ralph-tui run --tracker beads
+ralph-tui run --tracker beads-rust
 ```
 
 ralph-tui will:
@@ -314,4 +326,17 @@ ralph-tui will:
 - [ ] UI stories have browser verification (if specified in Quality Gates)
 - [ ] Acceptance criteria are verifiable (not vague)
 - [ ] No story depends on a later story (only earlier stories)
-- [ ] Dependencies added with `bd dep add` after creating beads
+- [ ] Dependencies added with `br dep add` after creating beads
+- [ ] Ran `br sync --flush-only` to export for git tracking
+
+---
+
+## Differences from beads (Go version)
+
+| Command | beads (`bd`) | beads-rust (`br`) |
+|---------|--------------|-------------------|
+| Create | `bd create` | `br create` |
+| Dependencies | `bd dep add` | `br dep add` |
+| Sync | `bd sync` | `br sync --flush-only` |
+| Close | `bd close` | `br close` |
+| Storage | `.beads/beads.jsonl` | `.beads/*.db` + JSONL export |

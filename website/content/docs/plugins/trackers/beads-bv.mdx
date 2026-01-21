@@ -31,16 +31,12 @@ bd init
 
 ## Basic Usage
 
-<Callout type="warning">
-**Important:** By default, Ralph TUI only shows issues with the `ralph` label. Either add this label to your issues, or change the label filter during setup (leave blank to see all issues).
-</Callout>
-
 <Steps>
   <Step title="Create an Epic">
-    First, create an epic to group your tasks. Add the `ralph` label:
+    First, create an epic to group your tasks:
 
     ```bash
-    bd create --title "Backend Refactor" --type epic --label ralph
+    bd create --title "Backend Refactor" --type epic
     # Created: beads-xyz
     ```
   </Step>
@@ -49,13 +45,13 @@ bd init
     Tasks must be **children** of the epic (using `--parent`) to appear when running with `--epic`:
 
     ```bash
-    bd create --title "Database schema" --type task --parent beads-xyz --label ralph
+    bd create --title "Database schema" --type task --parent beads-xyz
     # Created: beads-schema
 
-    bd create --title "API endpoints" --type task --parent beads-xyz --label ralph
+    bd create --title "API endpoints" --type task --parent beads-xyz
     # Created: beads-api
 
-    bd create --title "Frontend UI" --type task --parent beads-xyz --label ralph
+    bd create --title "Frontend UI" --type task --parent beads-xyz
     # Created: beads-frontend
     ```
 
@@ -106,7 +102,7 @@ tracker = "beads-bv"
 
 [trackerOptions]
 beadsDir = ".beads"
-labels = "ralph"
+# labels = "frontend,backend"  # Optional: filter by labels
 ```
 
 ### Options Reference
@@ -117,11 +113,11 @@ Same as the base Beads tracker:
 |--------|------|---------|-------------|
 | `beadsDir` | string | `.beads` | Path to .beads directory |
 | `epicId` | string | - | Epic ID to filter tasks (set via `--epic` flag) |
-| `labels` | string | `ralph` | Comma-separated label filter (issues must have these labels) |
+| `labels` | string | (empty) | Optional comma-separated label filter |
 | `workingDir` | string | `.` | Working directory for commands |
 
 <Callout type="info">
-See the [Beads Tracker docs](/docs/plugins/trackers/beads#label-filtering) for details on label filtering.
+See the [Beads Tracker docs](/docs/plugins/trackers/beads#label-filtering-optional) for details on label filtering.
 </Callout>
 
 ## How BV Selects Tasks

@@ -66,8 +66,33 @@ function extractInsights(output: string): string[] {
 }
 
 /**
+ * Check if a line looks like tool output that should be filtered from notes.
+ * This includes Read tool output (line numbers), XML markers, and other artifacts.
+ */
+function isToolOutputLine(line: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return true; // Filter empty lines
+
+  // Read tool output: line numbers like "00001|" or "  123|" at start
+  if (/^\s*\d{3,6}\|/.test(trimmed)) return true;
+
+  // File content markers and XML-like tags from tool results
+  if (/^<\/?(?:file|function_results|system-reminder)/.test(trimmed)) return true;
+
+  // Lines that are just closing XML tags
+  if (/^<\/\w+>$/.test(trimmed)) return true;
+
+  // Lines that look like raw code artifacts (common patterns from Read output)
+  // e.g., lines that are just punctuation like "}", "});", "|", etc.
+  if (/^[}\]);|]+$/.test(trimmed)) return true;
+
+  return false;
+}
+
+/**
  * Extract completion notes - text immediately before <promise>COMPLETE</promise>.
  * Agents often summarize what was done right before the completion marker.
+ * Filters out tool output (like Read tool line numbers) to get meaningful notes.
  */
 function extractCompletionNotes(output: string): string | undefined {
   const match = output.match(COMPLETION_NOTES_PATTERN);
@@ -77,9 +102,11 @@ function extractCompletionNotes(output: string): string | undefined {
   const beforeComplete = output.slice(0, match.index);
   const lastSection = beforeComplete.slice(-500).trim();
 
-  // Look for a summary-like section (bullet points, "completed", etc.)
-  const lines = lastSection.split('\n').filter(l => l.trim());
-  const relevantLines = lines.slice(-5); // Last 5 lines before completion
+  // Filter out tool output lines and keep meaningful content
+  const lines = lastSection.split('\n').filter((l) => !isToolOutputLine(l));
+
+  // Get last 5 meaningful lines before completion
+  const relevantLines = lines.slice(-5);
 
   if (relevantLines.length > 0) {
     return relevantLines.join('\n');

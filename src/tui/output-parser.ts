@@ -57,6 +57,105 @@ function isDroidAgent(agentPlugin?: string): boolean {
   return agentPlugin?.toLowerCase().includes('droid') ?? false;
 }
 
+function isOpenCodeAgent(agentPlugin?: string): boolean {
+  return agentPlugin?.toLowerCase() === 'opencode';
+}
+
+/**
+ * Structure of an OpenCode JSONL event.
+ */
+interface OpenCodeEvent {
+  type: 'text' | 'tool_use' | 'tool_result' | 'step_start' | 'step_finish' | 'error';
+  part?: {
+    text?: string;
+    tool?: string;
+    name?: string;
+    state?: {
+      input?: Record<string, unknown>;
+      isError?: boolean;
+      is_error?: boolean;
+      error?: string;
+      content?: string;
+    };
+  };
+  error?: {
+    message?: string;
+  };
+}
+
+/**
+ * Parse an OpenCode JSONL line and return the parsed event if valid.
+ */
+function parseOpenCodeJsonlLine(line: string): { success: boolean; event?: OpenCodeEvent } {
+  if (!line.trim() || !line.startsWith('{')) {
+    return { success: false };
+  }
+
+  try {
+    const parsed = JSON.parse(line) as OpenCodeEvent;
+    // Check if it looks like an opencode event
+    if (parsed.type && ['text', 'tool_use', 'tool_result', 'step_start', 'step_finish', 'error'].includes(parsed.type)) {
+      return { success: true, event: parsed };
+    }
+    return { success: false };
+  } catch {
+    return { success: false };
+  }
+}
+
+/**
+ * Format an OpenCode event for display.
+ * Returns undefined for events that shouldn't be displayed (like step markers).
+ */
+function formatOpenCodeEventForDisplay(event: OpenCodeEvent): string | undefined {
+  switch (event.type) {
+    case 'text':
+      // Main text output from the LLM
+      if (event.part?.text) {
+        return event.part.text;
+      }
+      break;
+
+    case 'tool_use': {
+      // Tool being called - show name
+      const toolName = event.part?.tool || event.part?.name || 'unknown';
+      const input = event.part?.state?.input;
+      if (input) {
+        // Show tool name and key input details
+        const inputStr = Object.entries(input)
+          .slice(0, 2)
+          .map(([k, v]) => `${k}=${typeof v === 'string' ? v.slice(0, 50) : '...'}`)
+          .join(', ');
+        return `[Tool: ${toolName}] ${inputStr}`;
+      }
+      return `[Tool: ${toolName}]`;
+    }
+
+    case 'tool_result': {
+      // Tool completed - only show if error
+      const resultState = event.part?.state;
+      const isError = resultState?.isError === true || resultState?.is_error === true;
+      if (isError) {
+        const errorMsg = resultState?.error || resultState?.content || 'tool execution failed';
+        return `[Tool Error] ${errorMsg}`;
+      }
+      // Don't display successful tool results (too verbose)
+      return undefined;
+    }
+
+    case 'error':
+      // Error from opencode
+      return `Error: ${event.error?.message || 'Unknown error'}`;
+
+    case 'step_start':
+    case 'step_finish':
+      // Step markers - don't display
+      return undefined;
+  }
+
+  return undefined;
+}
+
 /**
  * Parse a JSONL line and extract any readable content.
  * Returns the extracted text or undefined if the line doesn't contain readable content.
@@ -124,6 +223,7 @@ export function parseAgentOutput(rawOutput: string, agentPlugin?: string): strin
   const parsedParts: string[] = [];
   const plainTextLines: string[] = [];
   const useDroidParser = isDroidAgent(agentPlugin);
+  const useOpenCodeParser = isOpenCodeAgent(agentPlugin);
   const droidCostAccumulator = useDroidParser ? new DroidCostAccumulator() : null;
   let hasJsonl = false;
 
@@ -140,6 +240,19 @@ export function parseAgentOutput(rawOutput: string, agentPlugin?: string): strin
           parsedParts.push(droidDisplay);
           continue;
         }
+      }
+    }
+
+    // OpenCode-specific parsing
+    if (useOpenCodeParser) {
+      const openCodeResult = parseOpenCodeJsonlLine(line);
+      if (openCodeResult.success && openCodeResult.event) {
+        hasJsonl = true;
+        const openCodeDisplay = formatOpenCodeEventForDisplay(openCodeResult.event);
+        if (openCodeDisplay !== undefined) {
+          parsedParts.push(openCodeDisplay);
+        }
+        continue; // Skip generic parsing for opencode events
       }
     }
 
@@ -226,10 +339,12 @@ export class StreamingOutputParser {
   private lastResultText = '';
   private lastCostSummary = '';
   private isDroid: boolean;
+  private isOpenCode: boolean;
   private droidCostAccumulator?: DroidCostAccumulator;
 
   constructor(options: StreamingOutputParserOptions = {}) {
     this.isDroid = isDroidAgent(options.agentPlugin);
+    this.isOpenCode = isOpenCodeAgent(options.agentPlugin);
     if (this.isDroid) {
       this.droidCostAccumulator = new DroidCostAccumulator();
     }
@@ -242,6 +357,7 @@ export class StreamingOutputParser {
   setAgentPlugin(agentPlugin: string): void {
     const wasDroid = this.isDroid;
     this.isDroid = isDroidAgent(agentPlugin);
+    this.isOpenCode = isOpenCodeAgent(agentPlugin);
     if (this.isDroid && !wasDroid) {
       this.droidCostAccumulator = new DroidCostAccumulator();
     }
@@ -353,6 +469,16 @@ export class StreamingOutputParser {
       }
     }
 
+    // OpenCode-specific parsing
+    if (this.isOpenCode) {
+      const openCodeResult = parseOpenCodeJsonlLine(trimmed);
+      if (openCodeResult.success && openCodeResult.event) {
+        const openCodeDisplay = formatOpenCodeEventForDisplay(openCodeResult.event);
+        // Return the display text or undefined (to skip system events)
+        return openCodeDisplay;
+      }
+    }
+
     // Not JSON - return as plain text if it's not just whitespace
     if (!trimmed.startsWith('{')) {
       return trimmed;
@@ -432,6 +558,26 @@ export class StreamingOutputParser {
           return segments.map(s => ({ ...s, text: stripAnsiCodes(s.text) }));
         }
         // Droid event was recognized but nothing to display
+        return [];
+      }
+    }
+
+    // OpenCode-specific segment extraction
+    if (this.isOpenCode) {
+      const openCodeResult = parseOpenCodeJsonlLine(trimmed);
+      if (openCodeResult.success && openCodeResult.event) {
+        const displayText = formatOpenCodeEventForDisplay(openCodeResult.event);
+        if (displayText) {
+          // Format tool calls with color
+          if (openCodeResult.event.type === 'tool_use') {
+            return [{ text: displayText, color: 'cyan' }];
+          }
+          if (openCodeResult.event.type === 'error') {
+            return [{ text: displayText, color: 'yellow' }];
+          }
+          return [{ text: displayText }];
+        }
+        // OpenCode event was recognized but nothing to display (system events)
         return [];
       }
     }
