@@ -97,12 +97,22 @@ jobs:
           bun test src/plugins/agents/ src/plugins/trackers/builtin/beads.test.ts --coverage --coverage-reporter=text --coverage-reporter=lcov 2>&1 | tee -a coverage-output.txt || true
           cp coverage/lcov.info coverage-parts/plugins.lcov || true
 
+          echo "=== Running src/session/ ===" | tee -a coverage-output.txt
+          bun test src/session/ --coverage --coverage-reporter=text --coverage-reporter=lcov 2>&1 | tee -a coverage-output.txt
+          cp coverage/lcov.info coverage-parts/session.lcov
+
           echo "=== Running src/sandbox/ ===" | tee -a coverage-output.txt
           bun test src/sandbox/ --coverage --coverage-reporter=text --coverage-reporter=lcov 2>&1 | tee -a coverage-output.txt
           cp coverage/lcov.info coverage-parts/sandbox.lcov
 
-          echo "=== Running src/setup/ ===" | tee -a coverage-output.txt
-          bun test src/setup/ --coverage --coverage-reporter=text --coverage-reporter=lcov 2>&1 | tee -a coverage-output.txt
+          # Run wizard.test.ts in isolation because it mocks skill-installer.js
+          # which leaks into skill-installer.test.ts via bun's process-level mock.module()
+          echo "=== Running wizard.test.ts (isolated) ===" | tee -a coverage-output.txt
+          bun test src/setup/wizard.test.ts --coverage --coverage-reporter=text --coverage-reporter=lcov 2>&1 | tee -a coverage-output.txt
+          cp coverage/lcov.info coverage-parts/wizard.lcov
+
+          echo "=== Running src/setup/ (excluding wizard) ===" | tee -a coverage-output.txt
+          bun test src/setup/skill-installer.test.ts src/setup/migration.test.ts src/setup/prompts.test.ts --coverage --coverage-reporter=text --coverage-reporter=lcov 2>&1 | tee -a coverage-output.txt
           cp coverage/lcov.info coverage-parts/setup.lcov
 
           echo "=== Running src/templates/ ===" | tee -a coverage-output.txt
@@ -141,7 +151,7 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           # Upload all batch coverage files - Codecov will merge them correctly
-          files: ./coverage-parts/tests.lcov,./coverage-parts/doctor.lcov,./coverage-parts/info.lcov,./coverage-parts/skills.lcov,./coverage-parts/config.lcov,./coverage-parts/engine.lcov,./coverage-parts/beads-bv.lcov,./coverage-parts/beads-rust.lcov,./coverage-parts/plugins.lcov,./coverage-parts/sandbox.lcov,./coverage-parts/setup.lcov,./coverage-parts/templates.lcov,./coverage-parts/tui.lcov
+          files: ./coverage-parts/tests.lcov,./coverage-parts/doctor.lcov,./coverage-parts/info.lcov,./coverage-parts/skills.lcov,./coverage-parts/config.lcov,./coverage-parts/engine.lcov,./coverage-parts/beads-bv.lcov,./coverage-parts/beads-rust.lcov,./coverage-parts/plugins.lcov,./coverage-parts/session.lcov,./coverage-parts/sandbox.lcov,./coverage-parts/wizard.lcov,./coverage-parts/setup.lcov,./coverage-parts/templates.lcov,./coverage-parts/tui.lcov
           fail_ci_if_error: false
           verbose: true
         env:

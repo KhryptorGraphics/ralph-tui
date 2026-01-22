@@ -53,7 +53,9 @@ outputDir = ".ralph-tui/iterations"
 # Progress file for cross-iteration context
 progressFile = ".ralph-tui/progress.md"
 
-# Auto-commit after each completed task
+# Auto-commit: when true, ralph-tui stages and commits all changes after each
+# successful task completion. When false, no automatic commit is made (agents
+# may still commit on their own if instructed by templates or CLAUDE.md).
 autoCommit = false
 
 # Custom prompt template path (relative or absolute)

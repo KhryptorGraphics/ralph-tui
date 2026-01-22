@@ -586,6 +586,7 @@ export async function buildConfig(
     sandbox,
     // CLI --prompt takes precedence over config file prompt_template
     promptTemplate: options.promptPath ?? storedConfig.prompt_template,
+    autoCommit: storedConfig.autoCommit ?? false,
   };
 }
 

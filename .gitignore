@@ -55,3 +55,6 @@ examples/
 prd-example.json
 coverage/
 package-lock.json
+
+# Personal context (not for upstream)
+.kiro/

@@ -6,7 +6,7 @@ description: Resume an interrupted Ralph TUI session from where it left off.
 ## Synopsis
 
 ```bash
-ralph-tui resume [options]
+ralph-tui resume [session-id] [options]
 ```
 
 The `resume` command continues execution from a previously interrupted session. Ralph loads the saved session state and picks up where it left off, automatically resetting any stale "in_progress" tasks.
@@ -15,13 +15,33 @@ The `resume` command continues execution from a previously interrupted session. 
 Session state is automatically saved to `.ralph-tui/session.json`. You can resume even after crashes or forced exits.
 </Callout>
 
+## Arguments
+
+| Argument | Description |
+|----------|-------------|
+| `session-id` | (Optional) Session ID to resume. First 8 characters are usually enough. If not provided, resumes session in current directory. |
+
 ## Options
 
 | Option | Description |
 |--------|-------------|
+| `--list`, `-l` | List all resumable sessions across all directories |
+| `--cleanup` | Remove stale entries from the session registry |
 | `--cwd <path>` | Working directory (where to find the session file) |
 | `--headless` | Run without TUI |
 | `--force` | Override stale lock (use if another instance crashed) |
+
+## Session Registry
+
+Ralph maintains a global registry of sessions at `~/.config/ralph-tui/sessions.json`. This allows you to:
+
+- **Resume from any directory** - No need to `cd` into the project first
+- **List all active sessions** - See what's running across all projects
+- **Resume by session ID** - Use the first 8 characters of the session ID
+
+<Callout type="info">
+The session registry is automatically updated when you start, pause, or complete sessions. Use `--cleanup` to remove entries for sessions that no longer exist.
+</Callout>
 
 ## Examples
 
@@ -35,11 +55,48 @@ ralph-tui resume
 ralph-tui resume --headless
 ```
 
+### List Available Sessions
+
+```bash
+# See all resumable sessions
+ralph-tui resume --list
+```
+
+Output example:
+```
+Resumable sessions:
+
+   ID        Status       Agent       Tracker
+   ─────────────────────────────────────────────────
+1. ⏸ a1b2c3d4  paused       claude      prd:./tasks/prd.json
+   /home/user/my-project
+
+2. ⚠ e5f6g7h8  interrupted  codex       epic:EPIC-123
+   /home/user/another-project
+```
+
+### Resume by Session ID
+
+```bash
+# Resume a specific session (from any directory)
+ralph-tui resume a1b2c3d4
+
+# The full session ID also works
+ralph-tui resume a1b2c3d4-e5f6-7890-abcd-ef1234567890
+```
+
 ### Resume from Different Directory
 
 ```bash
-# Resume a session in another project
+# Resume a session in another project (traditional method)
 ralph-tui resume --cwd /path/to/project
+```
+
+### Clean Up Stale Registry Entries
+
+```bash
+# Remove registry entries for sessions that no longer exist
+ralph-tui resume --cleanup
 ```
 
 ### Force Override Stale Lock
@@ -72,6 +129,18 @@ If Ralph was interrupted while a task was "in_progress", resume automatically:
 
 This ensures no tasks are permanently stuck due to crashes.
 
+## Session States
+
+Sessions can be in one of these states:
+
+| State | Icon | Resumable | Description |
+|-------|------|-----------|-------------|
+| `running` | ▶ | Yes | Session is (or was) actively running |
+| `paused` | ⏸ | Yes | Session was manually paused |
+| `interrupted` | ⚠ | Yes | Session was stopped via Ctrl+C or signal |
+| `completed` | ✓ | No | All tasks finished successfully |
+| `failed` | ✗ | No | Session encountered a fatal error |
+
 ## Session Lock
 
 Ralph uses a lock mechanism to prevent multiple instances:
@@ -95,9 +164,20 @@ Ralph uses a lock mechanism to prevent multiple instances:
     Session state is saved automatically.
   </Step>
 
+  <Step title="Check Sessions (Optional)">
+    ```bash
+    ralph-tui resume --list
+    ```
+    View all available sessions.
+  </Step>
+
   <Step title="Resume Later">
     ```bash
+    # From the same directory
     ralph-tui resume
+
+    # Or from anywhere using session ID
+    ralph-tui resume a1b2c3d4
     ```
     Ralph continues from where it left off.
   </Step>
@@ -122,8 +202,38 @@ ralph-tui resume --force
 No `.ralph-tui/session.json` file exists in the working directory:
 
 ```bash
-# Start a new session instead
+# Check if there are sessions in other directories
+ralph-tui resume --list
+
+# If session exists elsewhere, resume by ID
+ralph-tui resume <session-id>
+
+# Or start a new session
 ralph-tui run --prd ./prd.json
+```
+
+### "Multiple sessions match prefix"
+
+Your session ID prefix matches multiple sessions:
+
+```bash
+# Use a longer prefix to be more specific
+ralph-tui resume a1b2c3d4e5
+
+# Or use --list to see all session IDs
+ralph-tui resume --list
+```
+
+### "Session not found in registry"
+
+The session may have been started before the registry feature was added:
+
+```bash
+# Resume using --cwd instead
+ralph-tui resume --cwd /path/to/project
+
+# Or clean up stale entries
+ralph-tui resume --cleanup
 ```
 
 ### "Task stuck in_progress"

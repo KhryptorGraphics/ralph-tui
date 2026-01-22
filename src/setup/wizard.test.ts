@@ -26,6 +26,7 @@ import { registerBuiltinTrackers } from '../plugins/trackers/builtin/index.js';
 let mockPromptSelect: (prompt: string, choices: unknown[], options?: unknown) => Promise<string>;
 let mockPromptNumber: (prompt: string, options?: unknown) => Promise<number>;
 let mockPromptBoolean: (prompt: string, options?: unknown) => Promise<boolean>;
+let mockIsInteractiveTerminal: () => boolean;
 
 // Mock the prompts module before importing wizard
 mock.module('./prompts.js', () => ({
@@ -39,13 +40,21 @@ mock.module('./prompts.js', () => ({
   printSuccess: () => {},
   printInfo: () => {},
   printError: () => {},
+  isInteractiveTerminal: () => mockIsInteractiveTerminal(),
 }));
 
 // Mock skill-installer to avoid file system operations during tests
 mock.module('./skill-installer.js', () => ({
   listBundledSkills: () => Promise.resolve([]),
-  installSkill: () => Promise.resolve({ success: true }),
-  isSkillInstalled: () => Promise.resolve(false),
+  isSkillInstalledAt: () => Promise.resolve(false),
+  resolveSkillsPath: (p: string) => p.replace(/^~/, '/home/test'),
+  installSkillsForAgent: () => Promise.resolve({
+    agentId: 'claude',
+    agentName: 'Claude Code',
+    skills: new Map(),
+    hasInstalls: true,
+    allSkipped: false,
+  }),
 }));
 
 // Mock agent preflight to avoid timeouts in tests
@@ -70,6 +79,21 @@ mock.module('../plugins/agents/registry.js', () => ({
       { id: 'opencode', name: 'OpenCode', description: 'OpenCode AI', version: '1.0.0' },
       { id: 'droid', name: 'Droid', description: 'Factory Droid', version: '1.0.0' },
     ],
+    getPluginMeta: (id: string) => ({
+      id,
+      name: id === 'claude' ? 'Claude Code' : id,
+      description: `${id} AI`,
+      version: '1.0.0',
+      defaultCommand: id,
+      supportsStreaming: true,
+      supportsInterrupt: true,
+      supportsFileContext: true,
+      supportsSubagentTracing: true,
+      skillsPaths: {
+        personal: `~/.${id}/skills`,
+        repo: `.${id}/skills`,
+      },
+    }),
     createInstance: (id: string) => createMockAgentInstance(id, id),
     hasPlugin: (name: string) => ['claude', 'opencode', 'droid'].includes(name),
     // Mock registerBuiltin to prevent errors when registerBuiltinAgents is called
@@ -152,11 +176,24 @@ describe('runSetupWizard', () => {
     mockPromptSelect = () => Promise.resolve('json');
     mockPromptNumber = () => Promise.resolve(10);
     mockPromptBoolean = () => Promise.resolve(false);
+    mockIsInteractiveTerminal = () => true;
   });
 
   afterEach(async () => {
     await rm(tempDir, { recursive: true, force: true });
     consoleLogSpy.mockRestore();
+  });
+
+  test('fails with helpful message when not in interactive terminal', async () => {
+    // Simulate non-TTY environment (like running in container or piped input)
+    mockIsInteractiveTerminal = () => false;
+
+    const result = await runSetupWizard({ cwd: tempDir });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('interactive terminal');
+    expect(result.error).toContain('TTY');
+    expect(result.error).toContain('.ralph-tui/config.toml');
   });
 
   test('creates config file in .ralph-tui directory', async () => {
@@ -308,6 +345,7 @@ describe('checkAndRunSetup', () => {
     mockPromptSelect = () => Promise.resolve('json');
     mockPromptNumber = () => Promise.resolve(10);
     mockPromptBoolean = () => Promise.resolve(false);
+    mockIsInteractiveTerminal = () => true;
 
     // Suppress console output
     consoleLogSpy = spyOn(console, 'log').mockImplementation(() => {});
@@ -369,6 +407,7 @@ describe('wizard output messages', () => {
     mockPromptSelect = () => Promise.resolve('json');
     mockPromptNumber = () => Promise.resolve(10);
     mockPromptBoolean = () => Promise.resolve(false);
+    mockIsInteractiveTerminal = () => true;
   });
 
   afterEach(async () => {

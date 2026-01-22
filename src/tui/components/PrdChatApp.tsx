@@ -18,8 +18,8 @@ import { ConfirmationDialog } from './ConfirmationDialog.js';
 import { ChatEngine, createPrdChatEngine, createTaskChatEngine, slugify } from '../../chat/engine.js';
 import type { ChatMessage, ChatEvent } from '../../chat/types.js';
 import type { AgentPlugin } from '../../plugins/agents/types.js';
-import type { FormattedSegment } from '../../plugins/agents/output-formatting.js';
-import { parsePrdMarkdown } from '../../prd/index.js';
+import { stripAnsiCodes, type FormattedSegment } from '../../plugins/agents/output-formatting.js';
+import { parsePrdMarkdown } from '../../prd/parser.js';
 import { colors } from '../theme.js';
 
 /**
@@ -327,12 +327,15 @@ export function PrdChatApp({
       const filename = `prd-${slug}.md`;
       const filepath = join(fullOutputDir, filename);
 
+      // Strip ANSI codes before saving (agents like Kiro output colored text)
+      const cleanContent = stripAnsiCodes(content);
+
       // Write the file
-      await writeFile(filepath, content, 'utf-8');
+      await writeFile(filepath, cleanContent, 'utf-8');
 
       // Update state for review phase
       if (isMountedRef.current) {
-        setPrdContent(content);
+        setPrdContent(cleanContent);
         setPrdPath(filepath);
         setFeatureName(name);
         setPhase('review');

@@ -120,6 +120,47 @@ Examples:
 `);
 }
 
+/**
+ * Try to load the bundled ralph-tui-prd skill from the agent's skills directory.
+ * Returns the skill source if found, undefined otherwise.
+ * @internal Exported for testing
+ */
+export async function loadBundledPrdSkill(agent: AgentPlugin): Promise<string | undefined> {
+  const skillsPaths = agent.meta.skillsPaths;
+  if (!skillsPaths) return undefined;
+
+  // Try personal skills directory first (e.g., ~/.kiro/skills/)
+  if (skillsPaths.personal) {
+    const personalPath = skillsPaths.personal.replace(/^~/, process.env.HOME || '');
+    const skillFile = join(personalPath, 'ralph-tui-prd', 'SKILL.md');
+    try {
+      await access(skillFile, constants.R_OK);
+      const content = await readFile(skillFile, 'utf-8');
+      if (content.trim()) {
+        return content;
+      }
+    } catch {
+      // Not found in personal, try repo
+    }
+  }
+
+  // Try repo skills directory (e.g., .kiro/skills/)
+  if (skillsPaths.repo) {
+    const skillFile = join(process.cwd(), skillsPaths.repo, 'ralph-tui-prd', 'SKILL.md');
+    try {
+      await access(skillFile, constants.R_OK);
+      const content = await readFile(skillFile, 'utf-8');
+      if (content.trim()) {
+        return content;
+      }
+    } catch {
+      // Not found
+    }
+  }
+
+  return undefined;
+}
+
 async function loadPrdSkillSource(
   prdSkill: string,
   skillsDir: string,
@@ -270,6 +311,16 @@ async function runChatMode(parsedArgs: CreatePrdArgs): Promise<PrdCreationResult
   }
 
   console.log('✓ Agent is ready');
+
+  // Auto-load bundled skill if no custom skill specified
+  if (!parsedArgs.prdSkillSource) {
+    const bundledSkill = await loadBundledPrdSkill(agent);
+    if (bundledSkill) {
+      parsedArgs.prdSkillSource = bundledSkill;
+      console.log('✓ Loaded ralph-tui-prd skill');
+    }
+  }
+
   console.log('');
 
   // Create renderer and render the chat app

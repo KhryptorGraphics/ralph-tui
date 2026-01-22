@@ -286,6 +286,9 @@ export interface RalphConfig {
 
   /** Session ID for log file naming and tracking */
   sessionId?: string;
+
+  /** Whether to auto-commit after successful task completion (default: false) */
+  autoCommit?: boolean;
 }
 
 /**
