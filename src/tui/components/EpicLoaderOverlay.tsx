@@ -165,8 +165,8 @@ export function EpicLoaderOverlay({
             break;
 
           default:
-            // Handle character input
-            if (key.sequence && key.sequence.length === 1 && key.name !== 'backspace') {
+            // Handle character input (including pasted text which may be multi-character)
+            if (key.sequence && key.name !== 'backspace') {
               setFilePath((prev) => prev + key.sequence);
             }
             break;

@@ -405,3 +405,20 @@ export {
   type LockCheckResult,
   type LockAcquisitionResult,
 } from './lock.js';
+
+// Re-export registry module for cross-directory session discovery
+export {
+  registerSession,
+  updateRegistryStatus,
+  unregisterSession,
+  getSessionById,
+  getSessionByCwd,
+  listResumableSessions,
+  listAllSessions,
+  cleanupStaleRegistryEntries,
+  findSessionsByPrefix,
+  getRegistryFilePath,
+  loadRegistry,
+  type SessionRegistryEntry,
+  type SessionRegistry,
+} from './registry.js';

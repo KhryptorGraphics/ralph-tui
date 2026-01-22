@@ -36,6 +36,9 @@ import {
   registerLockCleanupHandlers,
   checkLock,
   detectAndRecoverStaleSession,
+  registerSession,
+  unregisterSession,
+  updateRegistryStatus,
   type PersistedSessionState,
 } from '../session/index.js';
 import { ExecutionEngine } from '../engine/index.js';
@@ -1843,6 +1846,20 @@ export async function executeRunCommand(args: string[]): Promise<void> {
   // Save initial state
   await savePersistedSession(persistedState);
 
+  // Register session in global registry for cross-directory resume
+  await registerSession({
+    sessionId: session.id,
+    cwd: config.cwd,
+    status: 'running',
+    startedAt: persistedState.startedAt,
+    updatedAt: persistedState.updatedAt,
+    agentPlugin: config.agent.plugin,
+    trackerPlugin: config.tracker.plugin,
+    epicId: config.epicId,
+    prdPath: config.prdPath,
+    sandbox: config.sandbox?.enabled,
+  });
+
   // Resolve notification settings from config + CLI flags
   const notificationsEnabled = resolveNotificationsEnabled(
     storedConfig?.notifications,
@@ -1876,6 +1893,8 @@ export async function executeRunCommand(args: string[]): Promise<void> {
     // Save failed state
     persistedState = failSession(persistedState);
     await savePersistedSession(persistedState);
+    // Update registry status to failed
+    await updateRegistryStatus(session.id, 'failed');
     await endSession(config.cwd, 'failed');
     await releaseLockNew(config.cwd);
     cleanupLockHandlers();
@@ -1893,10 +1912,14 @@ export async function executeRunCommand(args: string[]): Promise<void> {
     await savePersistedSession(persistedState);
     // Delete session file on successful completion
     await deletePersistedSession(config.cwd);
+    // Remove from registry on completion
+    await unregisterSession(session.id);
     console.log('\nSession completed successfully. Session file cleaned up.');
   } else {
     // Save current state (session remains resumable)
     await savePersistedSession(persistedState);
+    // Update registry with current status
+    await updateRegistryStatus(session.id, persistedState.status);
     console.log('\nSession state saved. Use "ralph-tui resume" to continue.');
   }
 
