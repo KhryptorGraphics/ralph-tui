@@ -106,6 +106,46 @@ interface RunningExecution {
  * Abstract base class for agent plugins.
  * Provides sensible defaults and utility methods for executing CLI-based agents.
  */
+/**
+ * Check if a string matches a glob pattern.
+ * Supports * (match any characters) and ? (match single character).
+ */
+function globMatch(pattern: string, str: string): boolean {
+  // Escape regex special characters except * and ?
+  const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&');
+  // Convert glob wildcards to regex
+  const regex = new RegExp(
+    '^' + escaped.replace(/\*/g, '.*').replace(/\?/g, '.') + '$'
+  );
+  return regex.test(str);
+}
+
+/**
+ * Filter environment variables by excluding those matching patterns.
+ * @param env Environment variables object
+ * @param excludePatterns Patterns to exclude (exact names or glob patterns)
+ * @returns Filtered environment object
+ */
+function filterEnvByExclude(
+  env: NodeJS.ProcessEnv,
+  excludePatterns: string[]
+): NodeJS.ProcessEnv {
+  if (!excludePatterns || excludePatterns.length === 0) {
+    return env;
+  }
+
+  const filtered: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(env)) {
+    const shouldExclude = excludePatterns.some((pattern) =>
+      globMatch(pattern, key)
+    );
+    if (!shouldExclude) {
+      filtered[key] = value;
+    }
+  }
+  return filtered;
+}
+
 export abstract class BaseAgentPlugin implements AgentPlugin {
   abstract readonly meta: AgentPluginMeta;
 
@@ -114,6 +154,7 @@ export abstract class BaseAgentPlugin implements AgentPlugin {
   protected commandPath?: string;
   protected defaultFlags: string[] = [];
   protected defaultTimeout = 0; // 0 = no timeout
+  protected envExclude: string[] = []; // Environment variables to exclude
 
   /** Map of running executions by ID */
   private executions: Map<string, RunningExecution> = new Map();
@@ -141,6 +182,12 @@ export abstract class BaseAgentPlugin implements AgentPlugin {
 
     if (typeof config.timeout === 'number' && config.timeout > 0) {
       this.defaultTimeout = config.timeout;
+    }
+
+    if (Array.isArray(config.envExclude)) {
+      this.envExclude = config.envExclude.filter(
+        (p): p is string => typeof p === 'string' && p.length > 0
+      );
     }
 
     this.ready = true;
@@ -269,9 +316,10 @@ export abstract class BaseAgentPlugin implements AgentPlugin {
     const startedAt = new Date();
     const timeout = options?.timeout ?? this.defaultTimeout;
 
-    // Merge environment
+    // Merge environment, filtering out excluded variables
+    const baseEnv = filterEnvByExclude(process.env, this.envExclude);
     const env = {
-      ...process.env,
+      ...baseEnv,
       ...options?.env,
     };
 

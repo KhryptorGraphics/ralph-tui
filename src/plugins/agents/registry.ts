@@ -296,6 +296,7 @@ export class AgentRegistry {
       command: config.command,
       defaultFlags: config.defaultFlags,
       timeout: config.timeout,
+      envExclude: config.envExclude,
     };
 
     await instance.initialize(initConfig);

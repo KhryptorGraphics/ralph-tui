@@ -11,6 +11,8 @@ import {
   afterEach,
 } from 'bun:test';
 
+// Import the module to test internal functions via a workaround
+// We'll test the public interface and behavior
 import { BaseAgentPlugin } from './base.js';
 import type {
   AgentPluginMeta,
@@ -437,6 +439,260 @@ describe('BaseAgentPlugin execute lifecycle', () => {
 
       expect(startExecutionId).not.toBe('');
       expect(startExecutionId).toBe(result.executionId);
+    });
+  });
+});
+
+/**
+ * Test plugin that prints environment variables for testing envExclude.
+ * Uses 'printenv' on Unix or 'set' on Windows to list environment variables.
+ */
+class EnvTestPlugin extends BaseAgentPlugin {
+  readonly meta: AgentPluginMeta = {
+    id: 'env-test',
+    name: 'Env Test',
+    description: 'Test plugin for environment variable filtering',
+    version: '1.0.0',
+    author: 'Test',
+    defaultCommand: process.platform === 'win32' ? 'cmd' : 'printenv',
+    supportsStreaming: true,
+    supportsInterrupt: true,
+    supportsFileContext: false,
+    supportsSubagentTracing: false,
+  };
+
+  protected buildArgs(
+    prompt: string,
+    _files?: AgentFileContext[],
+    _options?: AgentExecuteOptions
+  ): string[] {
+    // On Windows: cmd /c set <VARNAME>
+    // On Unix: printenv <VARNAME>
+    if (process.platform === 'win32') {
+      return ['/c', 'set', prompt];
+    }
+    return [prompt];
+  }
+
+  override async detect(): Promise<AgentDetectResult> {
+    return {
+      available: true,
+      version: '1.0.0',
+      executablePath: this.meta.defaultCommand,
+    };
+  }
+}
+
+describe('BaseAgentPlugin envExclude', () => {
+  describe('initialize with envExclude', () => {
+    test('stores envExclude patterns from config', async () => {
+      const agent = new EnvTestPlugin();
+      await agent.initialize({
+        envExclude: ['API_KEY', '*_SECRET'],
+      });
+
+      // We can verify this by checking the agent is ready
+      // The actual filtering is tested in execute tests
+      await expect(agent.isReady()).resolves.toBe(true);
+      await agent.dispose();
+    });
+
+    test('handles empty envExclude array', async () => {
+      const agent = new EnvTestPlugin();
+      await agent.initialize({
+        envExclude: [],
+      });
+
+      await expect(agent.isReady()).resolves.toBe(true);
+      await agent.dispose();
+    });
+
+    test('filters out non-string values in envExclude', async () => {
+      const agent = new EnvTestPlugin();
+      await agent.initialize({
+        envExclude: ['VALID', 123, null, 'ALSO_VALID', ''],
+      });
+
+      await expect(agent.isReady()).resolves.toBe(true);
+      await agent.dispose();
+    });
+  });
+
+  describe('environment variable filtering during execute', () => {
+    test('excludes exact match environment variables', async () => {
+      const agent = new EnvTestPlugin();
+      await agent.initialize({
+        envExclude: ['TEST_EXCLUDE_VAR'],
+      });
+
+      // Set up test environment variable
+      const originalValue = process.env.TEST_EXCLUDE_VAR;
+      process.env.TEST_EXCLUDE_VAR = 'should_be_excluded';
+
+      let stdout = '';
+      const handle = agent.execute('TEST_EXCLUDE_VAR', [], {
+        onStdout: (data) => {
+          stdout += data;
+        },
+      });
+
+      await handle.promise;
+
+      // Clean up
+      if (originalValue === undefined) {
+        delete process.env.TEST_EXCLUDE_VAR;
+      } else {
+        process.env.TEST_EXCLUDE_VAR = originalValue;
+      }
+
+      await agent.dispose();
+
+      // The variable should NOT be in the output because it was excluded
+      // printenv returns empty/error for non-existent vars
+      expect(stdout).not.toContain('should_be_excluded');
+    });
+
+    test('excludes variables matching glob pattern with *', async () => {
+      const agent = new EnvTestPlugin();
+      await agent.initialize({
+        envExclude: ['TEST_*_PATTERN'],
+      });
+
+      // Set up test environment variable
+      const originalValue = process.env.TEST_GLOB_PATTERN;
+      process.env.TEST_GLOB_PATTERN = 'glob_excluded';
+
+      let stdout = '';
+      const handle = agent.execute('TEST_GLOB_PATTERN', [], {
+        onStdout: (data) => {
+          stdout += data;
+        },
+      });
+
+      await handle.promise;
+
+      // Clean up
+      if (originalValue === undefined) {
+        delete process.env.TEST_GLOB_PATTERN;
+      } else {
+        process.env.TEST_GLOB_PATTERN = originalValue;
+      }
+
+      await agent.dispose();
+
+      // The variable should NOT be in the output
+      expect(stdout).not.toContain('glob_excluded');
+    });
+
+    test('does not exclude variables that do not match patterns', async () => {
+      const agent = new EnvTestPlugin();
+      await agent.initialize({
+        envExclude: ['EXCLUDED_VAR'],
+      });
+
+      // Set up test environment variable that should NOT be excluded
+      const originalValue = process.env.TEST_KEPT_VAR;
+      process.env.TEST_KEPT_VAR = 'should_remain';
+
+      let stdout = '';
+      const handle = agent.execute('TEST_KEPT_VAR', [], {
+        onStdout: (data) => {
+          stdout += data;
+        },
+      });
+
+      await handle.promise;
+
+      // Clean up
+      if (originalValue === undefined) {
+        delete process.env.TEST_KEPT_VAR;
+      } else {
+        process.env.TEST_KEPT_VAR = originalValue;
+      }
+
+      await agent.dispose();
+
+      // The variable SHOULD be in the output
+      expect(stdout).toContain('should_remain');
+    });
+
+    test('excludes ANTHROPIC_API_KEY when configured', async () => {
+      const agent = new EnvTestPlugin();
+      await agent.initialize({
+        envExclude: ['ANTHROPIC_API_KEY'],
+      });
+
+      // Set up test environment variable
+      const originalValue = process.env.ANTHROPIC_API_KEY;
+      process.env.ANTHROPIC_API_KEY = 'sk-ant-test-key';
+
+      let stdout = '';
+      const handle = agent.execute('ANTHROPIC_API_KEY', [], {
+        onStdout: (data) => {
+          stdout += data;
+        },
+      });
+
+      await handle.promise;
+
+      // Clean up
+      if (originalValue === undefined) {
+        delete process.env.ANTHROPIC_API_KEY;
+      } else {
+        process.env.ANTHROPIC_API_KEY = originalValue;
+      }
+
+      await agent.dispose();
+
+      // The API key should NOT be in the output
+      expect(stdout).not.toContain('sk-ant-test-key');
+    });
+
+    test('excludes multiple patterns with *_API_KEY and *_SECRET', async () => {
+      const agent = new EnvTestPlugin();
+      await agent.initialize({
+        envExclude: ['*_API_KEY', '*_SECRET'],
+      });
+
+      // Set up test environment variables
+      const origApiKey = process.env.MY_API_KEY;
+      const origSecret = process.env.DB_SECRET;
+      process.env.MY_API_KEY = 'my-api-key-value';
+      process.env.DB_SECRET = 'db-secret-value';
+
+      // Test MY_API_KEY is excluded
+      let stdout1 = '';
+      const handle1 = agent.execute('MY_API_KEY', [], {
+        onStdout: (data) => {
+          stdout1 += data;
+        },
+      });
+      await handle1.promise;
+      expect(stdout1).not.toContain('my-api-key-value');
+
+      // Test DB_SECRET is excluded
+      let stdout2 = '';
+      const handle2 = agent.execute('DB_SECRET', [], {
+        onStdout: (data) => {
+          stdout2 += data;
+        },
+      });
+      await handle2.promise;
+      expect(stdout2).not.toContain('db-secret-value');
+
+      // Clean up
+      if (origApiKey === undefined) {
+        delete process.env.MY_API_KEY;
+      } else {
+        process.env.MY_API_KEY = origApiKey;
+      }
+      if (origSecret === undefined) {
+        delete process.env.DB_SECRET;
+      } else {
+        process.env.DB_SECRET = origSecret;
+      }
+
+      await agent.dispose();
     });
   });
 });

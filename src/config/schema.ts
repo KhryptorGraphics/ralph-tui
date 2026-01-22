@@ -78,6 +78,7 @@ export const AgentPluginConfigSchema = z.object({
   options: AgentOptionsSchema.optional().default({}),
   fallbackAgents: z.array(z.string().min(1)).optional(),
   rateLimitHandling: RateLimitHandlingConfigSchema.optional(),
+  envExclude: z.array(z.string().min(1)).optional(),
 });
 
 /**
@@ -159,6 +160,9 @@ export const StoredConfigSchema = z
 
     // Rate limit handling (shorthand for default agent)
     rateLimitHandling: RateLimitHandlingConfigSchema.optional(),
+
+    // Environment variable exclusion (shorthand for default agent)
+    envExclude: z.array(z.string().min(1)).optional(),
 
     // Custom prompt template path
     prompt_template: z.string().optional(),

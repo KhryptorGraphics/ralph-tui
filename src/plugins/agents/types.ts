@@ -234,6 +234,16 @@ export interface AgentPluginConfig {
 
   /** Rate limit handling configuration for this agent */
   rateLimitHandling?: RateLimitHandlingConfig;
+
+  /**
+   * Environment variables to exclude when spawning the agent process.
+   * Use this to prevent sensitive keys from being inherited by the agent.
+   * Supports exact names (e.g., "ANTHROPIC_API_KEY") or glob patterns (e.g., "*_API_KEY").
+   *
+   * @example ["ANTHROPIC_API_KEY"] - Exclude specific key
+   * @example ["*_API_KEY", "*_SECRET"] - Exclude all API keys and secrets
+   */
+  envExclude?: string[];
 }
 
 export interface AgentSandboxRequirements {
