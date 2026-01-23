@@ -235,7 +235,23 @@ function extractDependsOn(section: string): string[] | undefined {
 }
 
 /**
+ * Pattern to match bold-prefixed metadata fields that terminate description extraction.
+ * These are known structured fields, NOT description content.
+ */
+const DESCRIPTION_STOP_PATTERN = /^\*\*(Acceptance Criteria|Priority|Depends on|Labels|Notes):\*\*/;
+
+/**
+ * Pattern to match the **Description:** label prefix that LLMs sometimes generate.
+ * The actual description text follows the label on the same line.
+ */
+const DESCRIPTION_LABEL_PATTERN = /^\*\*Description:\*\*\s*/;
+
+/**
  * Extract the description (first paragraph) from a user story section.
+ * Handles multiple LLM output formats:
+ *   - Plain text: "As a user, I want..."
+ *   - Bold-label: "**Description:** As a user, I want..."
+ *   - Bold-keyword: "**As a** user **I want** to... **So that**..."
  */
 function extractStoryDescription(section: string, headerLine: string): string {
   // Get lines after the header
@@ -252,11 +268,11 @@ function extractStoryDescription(section: string, headerLine: string): string {
   for (let i = headerIndex + 1; i < lines.length; i++) {
     const line = lines[i]?.trim() ?? '';
 
-    // Stop at acceptance criteria or other sections
+    // Stop at acceptance criteria or other known metadata sections
     if (line.match(ACCEPTANCE_CRITERIA_PATTERN)) {
       break;
     }
-    if (line.startsWith('**')) {
+    if (line.match(DESCRIPTION_STOP_PATTERN)) {
       break;
     }
     if (line.startsWith('#')) {
@@ -266,16 +282,21 @@ function extractStoryDescription(section: string, headerLine: string): string {
       break;
     }
 
-    // Add non-empty lines
-    if (line) {
-      descLines.push(line);
+    // Strip **Description:** label prefix if present
+    const stripped = line.replace(DESCRIPTION_LABEL_PATTERN, '');
+
+    // Add non-empty lines (after stripping labels)
+    if (stripped) {
+      descLines.push(stripped);
     } else if (descLines.length > 0) {
       // Empty line ends the description paragraph
       break;
     }
   }
 
-  return descLines.join(' ').trim();
+  // Join and strip any remaining bold markers used for emphasis (e.g., **As a** → As a)
+  const raw = descLines.join(' ').trim();
+  return raw.replace(/\*\*([^*]+)\*\*/g, '$1');
 }
 
 /**

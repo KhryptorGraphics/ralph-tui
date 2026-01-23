@@ -45,8 +45,9 @@ const PRD_COMPATIBILITY_GUIDANCE = `
 - Include a "## Quality Gates" section listing required commands.
 - Include a "## User Stories" section with entries like:
   - "### US-001: Title"
-  - "**Description:** As a user, I want..."
+  - Plain text description on the next line: "As a user, I want to ... so that ..."
   - "**Acceptance Criteria:**" followed by checklist bullets ("- [ ] ...").
+- IMPORTANT: User story descriptions must be plain text (no **Description:** prefix).
 - Use markdown formatting suitable for conversion tools.
 `;
 

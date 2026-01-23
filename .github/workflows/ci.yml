@@ -123,6 +123,14 @@ jobs:
           bun test src/tui/ --coverage --coverage-reporter=text --coverage-reporter=lcov 2>&1 | tee -a coverage-output.txt
           cp coverage/lcov.info coverage-parts/tui.lcov
 
+          echo "=== Running src/prd/ ===" | tee -a coverage-output.txt
+          bun test src/prd/ --coverage --coverage-reporter=text --coverage-reporter=lcov 2>&1 | tee -a coverage-output.txt
+          cp coverage/lcov.info coverage-parts/prd.lcov
+
+          echo "=== Running src/chat/ ===" | tee -a coverage-output.txt
+          bun test src/chat/ --coverage --coverage-reporter=text --coverage-reporter=lcov 2>&1 | tee -a coverage-output.txt
+          cp coverage/lcov.info coverage-parts/chat.lcov
+
           echo "=== All test batches completed ===" | tee -a coverage-output.txt
           ls -la coverage-parts/
 
@@ -151,7 +159,7 @@ jobs:
         uses: codecov/codecov-action@v4
         with:
           # Upload all batch coverage files - Codecov will merge them correctly
-          files: ./coverage-parts/tests.lcov,./coverage-parts/doctor.lcov,./coverage-parts/info.lcov,./coverage-parts/skills.lcov,./coverage-parts/config.lcov,./coverage-parts/engine.lcov,./coverage-parts/beads-bv.lcov,./coverage-parts/beads-rust.lcov,./coverage-parts/plugins.lcov,./coverage-parts/session.lcov,./coverage-parts/sandbox.lcov,./coverage-parts/wizard.lcov,./coverage-parts/setup.lcov,./coverage-parts/templates.lcov,./coverage-parts/tui.lcov
+          files: ./coverage-parts/tests.lcov,./coverage-parts/doctor.lcov,./coverage-parts/info.lcov,./coverage-parts/skills.lcov,./coverage-parts/config.lcov,./coverage-parts/engine.lcov,./coverage-parts/beads-bv.lcov,./coverage-parts/beads-rust.lcov,./coverage-parts/plugins.lcov,./coverage-parts/session.lcov,./coverage-parts/sandbox.lcov,./coverage-parts/wizard.lcov,./coverage-parts/setup.lcov,./coverage-parts/templates.lcov,./coverage-parts/tui.lcov,./coverage-parts/prd.lcov,./coverage-parts/chat.lcov
           fail_ci_if_error: false
           verbose: true
         env:
