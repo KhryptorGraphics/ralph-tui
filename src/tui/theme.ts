@@ -5,7 +5,8 @@
  */
 
 import { readFile, access, constants } from 'node:fs/promises';
-import { resolve, isAbsolute } from 'node:path';
+import { resolve, isAbsolute, join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Theme color structure matching the colors constant.
@@ -372,13 +373,70 @@ function validateColors(obj: unknown, path: string = ''): string[] {
 }
 
 /**
- * Load and validate a theme file from the given path.
- * @param filePath Path to the JSON theme file (absolute or relative to cwd)
+ * List of bundled theme names available without a full path.
+ * These themes are shipped with ralph-tui in the assets/themes directory.
+ */
+export const BUNDLED_THEMES = [
+  'bright',
+  'catppuccin',
+  'dracula',
+  'high-contrast',
+  'solarized-light',
+] as const;
+
+export type BundledThemeName = (typeof BUNDLED_THEMES)[number];
+
+/**
+ * Directory containing bundled theme files.
+ * Themes are stored in assets/themes/ relative to the dist directory.
+ */
+function getThemesDir(): string {
+  // Handle both development and bundled scenarios
+  const currentFile = fileURLToPath(import.meta.url);
+  const currentDir = dirname(currentFile);
+
+  // In dev: src/tui/theme.ts -> ../../assets/themes
+  // In dist: dist/tui/theme.js -> ../assets/themes (copied during build)
+  if (currentDir.includes('/dist/') || currentDir.endsWith('/dist')) {
+    return join(currentDir, '..', 'assets', 'themes');
+  }
+  // Development: src/tui directory
+  return join(currentDir, '..', '..', 'assets', 'themes');
+}
+
+/**
+ * Resolve a theme path, supporting both bundled theme names and file paths.
+ *
+ * If the input is a simple name (no path separators, no .json extension),
+ * it's treated as a bundled theme name and resolved to assets/themes/<name>.json.
+ *
+ * Otherwise, it's treated as a file path (absolute or relative to cwd).
+ *
+ * @param themeInput Theme name or file path
+ * @returns Resolved absolute path to the theme file
+ */
+export function resolveThemePath(themeInput: string): string {
+  // Check if it looks like a bundled theme name (no path separators, no .json)
+  const isSimpleName = !themeInput.includes('/') && !themeInput.includes('\\') && !themeInput.endsWith('.json');
+
+  if (isSimpleName) {
+    // Resolve as bundled theme
+    const themesDir = getThemesDir();
+    return join(themesDir, `${themeInput}.json`);
+  }
+
+  // Treat as file path
+  return isAbsolute(themeInput) ? themeInput : resolve(process.cwd(), themeInput);
+}
+
+/**
+ * Load and validate a theme file from the given path or bundled theme name.
+ * @param themeInput Theme name (e.g., "dracula") or path to JSON theme file
  * @returns Parsed and validated theme colors object
  * @throws Error if file doesn't exist, can't be read, has invalid JSON, or has invalid colors
  */
-export async function loadThemeFile(filePath: string): Promise<ThemeColors> {
-  const resolvedPath = isAbsolute(filePath) ? filePath : resolve(process.cwd(), filePath);
+export async function loadThemeFile(themeInput: string): Promise<ThemeColors> {
+  const resolvedPath = resolveThemePath(themeInput);
 
   try {
     await access(resolvedPath, constants.R_OK);

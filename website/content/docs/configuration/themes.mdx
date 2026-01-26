@@ -5,24 +5,33 @@ description: Customize Ralph TUI's appearance with custom color themes.
 
 ## Custom Themes
 
-Ralph TUI supports custom color themes via JSON files. Load a theme at runtime with the `--theme` option:
+Ralph TUI supports custom color themes. Load a bundled theme by name or provide a path to a custom JSON file:
 
 ```bash
-ralph-tui run --theme ./assets/themes/high-contrast-theme.json
+# Use a bundled theme by name
+ralph-tui run --theme dracula
+
+# Or use a custom theme file
+ralph-tui run --theme ./my-custom-theme.json
 ```
 
 ## Bundled Themes
 
-Two themes are included in `assets/themes/`:
+Five themes are included with Ralph TUI:
 
 | Theme | Description |
 |-------|-------------|
-| `bright-theme.json` | Vibrant colors with purple backgrounds |
-| `high-contrast-theme.json` | High contrast with near-black backgrounds |
+| `bright` | Vibrant colors with purple backgrounds |
+| `catppuccin` | Soothing pastel colors (Mocha variant) |
+| `dracula` | Classic dark theme with vibrant accents |
+| `high-contrast` | High contrast with near-black backgrounds |
+| `solarized-light` | Light theme based on Solarized palette |
+
+The default theme is **Tokyo Night** when no `--theme` option is provided.
 
 ## Theme File Structure
 
-Theme files define colors for different UI elements. See [`assets/themes/high-contrast-theme.json`](https://github.com/subsy/ralph-tui/blob/main/assets/themes/high-contrast-theme.json) for a complete example.
+Theme files define colors for different UI elements. See [`assets/themes/high-contrast.json`](https://github.com/subsy/ralph-tui/blob/main/assets/themes/high-contrast.json) for a complete example.
 
 ```json
 {
@@ -105,7 +114,7 @@ Invalid hex colors will cause the theme to fail validation. Ralph TUI validates 
 
 1. Copy an existing theme as a starting point:
    ```bash
-   cp assets/themes/high-contrast-theme.json my-theme.json
+   cp assets/themes/dracula.json my-theme.json
    ```
 
 2. Edit the colors to your preference

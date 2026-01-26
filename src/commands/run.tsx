@@ -355,7 +355,7 @@ Options:
   --prompt <path>     Custom prompt file (default: based on tracker mode)
   --output-dir <path> Directory for iteration logs (default: .ralph-tui/iterations)
   --progress-file <path> Progress file for cross-iteration context (default: .ralph-tui/progress.md)
-  --theme <path>      Path to custom JSON theme file (absolute or relative to cwd)
+  --theme <name|path> Theme name (bright, catppuccin, dracula, high-contrast, solarized-light) or path to custom JSON theme file
   --iterations <n>    Maximum iterations (0 = unlimited)
   --delay <ms>        Delay between iterations in milliseconds
   --cwd <path>        Working directory

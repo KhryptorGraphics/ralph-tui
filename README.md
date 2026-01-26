@@ -117,8 +117,8 @@ ralph-tui run --headless
 # Requires bwrap to be installed and on PATH (Linux) or uses built-in sandbox-exec (macOS)
 ralph-tui run --sandbox
 
-# Use a custom color theme
-ralph-tui run --theme ./assets/themes/high-contrast-theme.json
+# Use a bundled color theme by name
+ralph-tui run --theme dracula
 ```
 
 ### Create PRD Options
@@ -174,12 +174,16 @@ See the [full CLI reference](https://ralph-tui.com/docs/cli/overview) for all op
 Ralph TUI supports custom color themes via the `--theme` option:
 
 ```bash
-ralph-tui run --theme ./assets/themes/high-contrast-theme.json
+# Use a bundled theme by name
+ralph-tui run --theme dracula
+
+# Or use a custom theme file
+ralph-tui run --theme ./my-custom-theme.json
 ```
 
 ![Custom Theme Example](docs/images/theme-example.png)
 
-Bundled themes in `assets/themes/`: `bright-theme.json`, `high-contrast-theme.json`
+Bundled themes: `bright`, `catppuccin`, `dracula`, `high-contrast`, `solarized-light`
 
 See the [Themes documentation](https://ralph-tui.com/docs/configuration/themes) for the full theme schema and creating custom themes.
 
