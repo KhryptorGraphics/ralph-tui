@@ -13,7 +13,7 @@ import {
   extractCodebasePatterns,
   getCodebasePatternsForPrompt,
   PROGRESS_FILE,
-} from './progress.js';
+} from '../../src/logs/progress.js';
 
 describe('progress.ts', () => {
   describe('file operations', () => {
